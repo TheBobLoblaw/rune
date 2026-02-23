@@ -5,6 +5,7 @@ import { DB_PATH, openDb, nowIso } from './db.js';
 import { colors } from './colors.js';
 import { factsToMarkdown } from './format.js';
 import { extractFactsFromFile } from './extract.js';
+import { runTestSuites } from './test-runner.js';
 import { UserError } from './errors.js';
 
 const DEFAULT_LIMIT = 100;
@@ -929,6 +930,20 @@ export function runCli(argv) {
       db.close();
 
       console.log(colors.green(`Pruned ${res.changes} fact(s)`));
+    });
+
+  program.command('test [suite]')
+    .description('Run test and benchmark suites (unit, extract, recall, perf, e2e, all)')
+    .option('--save', 'Save results to benchmark history')
+    .option('--compare', 'Compare current results against last saved run')
+    .option('--verbose', 'Show detailed suite output')
+    .option('--db <path>', 'Use alternate base DB path for test suites', '/tmp/rune-test.db')
+    .option('--model <model>', 'Ollama model for extraction benchmarks', 'qwen3:8b')
+    .action(async (suite = 'all', options) => {
+      const outcome = await runTestSuites(suite, options);
+      if (!outcome.ok) {
+        process.exitCode = 1;
+      }
     });
 
   program.configureOutput({

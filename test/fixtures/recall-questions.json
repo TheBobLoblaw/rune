@@ -1,0 +1,9 @@
+[
+  { "question": "What is Cory's son's name?", "expected_key": "person/cory.son", "expected_contains": "Liam" },
+  { "question": "What color is the TKNS brand?", "expected_key": "project/cad-wiki.brand-color", "expected_contains": "#003ba9" },
+  { "question": "Why did we choose Rune as the codename?", "expected_key": "decision/rune.codename", "expected_contains": "Norse" },
+  { "question": "Who is Bobsy?", "expected_key": "person/cory.discord.alt", "expected_contains": "Cory" },
+  { "question": "What editor does cad-wiki use?", "expected_key": "project/cad-wiki.editor", "expected_contains": "TipTap" },
+  { "question": "What should I never do with the gateway?", "expected_key": "lesson/gateway-restart", "expected_contains": "NEVER restart" },
+  { "question": "What's Cory's timezone?", "expected_key": "preference/cory.timezone", "expected_contains": "Eastern" }
+]

@@ -1,0 +1,6 @@
+{
+  "facts": [
+    { "category": "decision", "key": "deploy.cadence", "value": "Tuesday morning" },
+    { "category": "project", "key": "deploy.rollback_window", "value": "30 minutes" }
+  ]
+}

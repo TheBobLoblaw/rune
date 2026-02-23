@@ -1,0 +1,10 @@
+{
+  "facts": [
+    { "category": "project", "key": "cad-wiki.editor", "value": "TipTap" },
+    { "category": "project", "key": "cad-wiki.storage", "value": "SQLite" },
+    { "category": "tool", "key": "cad-wiki.migrations", "value": "drizzle-kit" },
+    { "category": "project", "key": "cad-wiki.hosting", "value": "Fly.io" },
+    { "category": "tool", "key": "cad-wiki.ci", "value": "GitHub Actions" },
+    { "category": "decision", "key": "rune.codename", "value": "Norse" }
+  ]
+}

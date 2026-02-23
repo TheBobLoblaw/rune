@@ -1,0 +1,9 @@
+{
+  "facts": [
+    { "category": "person", "key": "cory.son", "value": "Liam" },
+    { "category": "person", "key": "cory.discord.alt", "value": "Bobsy" },
+    { "category": "person", "key": "dana.role", "value": "Cory's manager" },
+    { "category": "person", "key": "cory.employer", "value": "Acme Corp" },
+    { "category": "person", "key": "cory.collaborator", "value": "Sam" }
+  ]
+}

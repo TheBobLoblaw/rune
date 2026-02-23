@@ -1,0 +1,9 @@
+{
+  "facts": [
+    { "category": "person", "key": "alex.name", "value": "Alex" },
+    { "category": "person", "key": "alex.employer", "value": "Acme Corp" },
+    { "category": "person", "key": "alex.email", "value": "alex@acme.com" },
+    { "category": "decision", "key": "dashboard.framework", "value": "Vue" },
+    { "category": "project", "key": "dashboard.stack", "value": "Vue + Tailwind" }
+  ]
+}

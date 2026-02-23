@@ -73,8 +73,8 @@ CREATE INDEX IF NOT EXISTS idx_facts_expires_at ON facts(expires_at);
 
 export const DB_PATH = path.join(os.homedir(), '.openclaw', 'memory.db');
 
-export function ensureDbPath() {
-  const dir = path.dirname(DB_PATH);
+export function ensureDbPath(dbPath = DB_PATH) {
+  const dir = path.dirname(dbPath);
   fs.mkdirSync(dir, { recursive: true });
 }
 
@@ -107,9 +107,9 @@ function rebuildFtsIndex(db) {
   db.prepare("INSERT INTO facts_fts(facts_fts) VALUES ('rebuild')").run();
 }
 
-export function openDb() {
-  ensureDbPath();
-  const db = new Database(DB_PATH);
+export function openDb(dbPath = DB_PATH) {
+  ensureDbPath(dbPath);
+  const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 

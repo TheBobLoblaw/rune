@@ -1,0 +1,6 @@
+{
+  "facts": [
+    { "category": "preference", "key": "user.ui.theme", "value": "dark mode" },
+    { "category": "environment", "key": "server.os", "value": "Ubuntu 24.04" }
+  ]
+}
