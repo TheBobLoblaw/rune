@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { Command } from 'commander';
 import { DB_PATH, openDb, nowIso } from './db.js';
 import { colors } from './colors.js';
@@ -198,6 +199,213 @@ function requireFile(filePath) {
   if (!fs.existsSync(filePath)) {
     throw new UserError(`File not found: ${filePath}`);
   }
+}
+
+function requireDirectory(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    throw new UserError(`Directory not found: ${dirPath}`);
+  }
+  if (!fs.statSync(dirPath).isDirectory()) {
+    throw new UserError(`Not a directory: ${dirPath}`);
+  }
+}
+
+function toSummaryKey(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `summary.${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(date.getMinutes())}`;
+}
+
+function hasSessionSummary(summary) {
+  return (
+    summary.decisions.length > 0 ||
+    summary.open_questions.length > 0 ||
+    summary.action_items.length > 0 ||
+    summary.topics.length > 0
+  );
+}
+
+function globToRegex(glob) {
+  const escaped = String(glob).replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  const regexPattern = `^${escaped.replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\//g, '[/\\\\]')}$`;
+  return new RegExp(regexPattern, 'i');
+}
+
+function listFilesRecursive(rootDir, pattern, sinceIso = null) {
+  const matcher = globToRegex(pattern);
+  const out = [];
+  const stack = [rootDir];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      const rel = path.relative(rootDir, fullPath);
+      if (!matcher.test(rel) && !matcher.test(entry.name)) {
+        continue;
+      }
+      if (sinceIso) {
+        const stat = fs.statSync(fullPath);
+        if (stat.mtime.toISOString() <= sinceIso) {
+          continue;
+        }
+      }
+      out.push(fullPath);
+    }
+  }
+
+  out.sort((a, b) => a.localeCompare(b));
+  return out;
+}
+
+function applyExtractedFacts(db, facts) {
+  const now = nowIso();
+  const getByKey = db.prepare('SELECT * FROM facts WHERE category = ? AND key = ?');
+  const insertStmt = db.prepare(`
+    INSERT INTO facts (category, key, value, source, confidence, created, updated, scope, tier, expires_at, last_verified, source_type)
+    VALUES (@category, @key, @value, @source, @confidence, @created, @updated, @scope, @tier, @expires_at, @last_verified, @source_type)
+  `);
+  const updateChangedStmt = db.prepare(`
+    UPDATE facts
+    SET value = @value,
+        source = @source,
+        confidence = @confidence,
+        scope = @scope,
+        tier = @tier,
+        expires_at = @expires_at,
+        source_type = @source_type,
+        updated = @updated
+    WHERE category = @category AND key = @key
+  `);
+  const touchVerifiedStmt = db.prepare(`
+    UPDATE facts
+    SET last_verified = @last_verified
+    WHERE category = @category AND key = @key
+  `);
+
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  const tx = db.transaction((items) => {
+    for (const fact of items) {
+      const existing = getByKey.get(fact.category, fact.key);
+      if (!existing) {
+        insertStmt.run({
+          category: fact.category,
+          key: fact.key,
+          value: fact.value,
+          source: null,
+          confidence: fact.confidence ?? 0.8,
+          created: now,
+          updated: now,
+          scope: fact.scope ?? 'global',
+          tier: fact.tier ?? 'long-term',
+          expires_at: ttlToExpiresAt(fact.ttl),
+          last_verified: now,
+          source_type: fact.source_type ?? 'inferred'
+        });
+        inserted += 1;
+        continue;
+      }
+
+      if (existing.value === fact.value) {
+        touchVerifiedStmt.run({
+          category: fact.category,
+          key: fact.key,
+          last_verified: now
+        });
+        skipped += 1;
+        continue;
+      }
+
+      updateChangedStmt.run({
+        category: fact.category,
+        key: fact.key,
+        value: fact.value,
+        source: existing.source ?? null,
+        confidence: fact.confidence ?? existing.confidence ?? 0.8,
+        scope: fact.scope ?? existing.scope ?? 'global',
+        tier: fact.tier ?? existing.tier ?? 'long-term',
+        expires_at: ttlToExpiresAt(fact.ttl),
+        source_type: fact.source_type ?? existing.source_type ?? 'inferred',
+        updated: now
+      });
+      updated += 1;
+    }
+  });
+
+  tx(facts);
+  return { inserted, updated, skipped };
+}
+
+function storeSessionSummary(db, summary) {
+  if (!hasSessionSummary(summary)) {
+    return null;
+  }
+  const key = toSummaryKey();
+  upsertFact(db, {
+    category: 'session',
+    key,
+    value: JSON.stringify(summary),
+    scope: 'global',
+    tier: 'long-term',
+    source_type: 'inferred',
+    confidence: 0.9
+  });
+  return key;
+}
+
+async function runExtractOne(file, options) {
+  const extraction = await extractFactsFromFile(file, {
+    model: options.model,
+    verbose: Boolean(options.verbose)
+  });
+
+  if (extraction.facts.length === 0 && !hasSessionSummary(extraction.session_summary)) {
+    console.log(colors.yellow(`${file}: no useful extraction output`));
+    return { facts: 0, inserted: 0, updated: 0, skipped: 0, summaryStored: false };
+  }
+
+  if (options.dryRun) {
+    console.log(colors.bold(file));
+    for (const fact of extraction.facts) {
+      console.log(`${fact.category}/${fact.key} = ${fact.value} [scope=${fact.scope} tier=${fact.tier} source_type=${fact.source_type} confidence=${fact.confidence.toFixed(2)} ttl=${fact.ttl ?? 'none'}]`);
+    }
+    if (hasSessionSummary(extraction.session_summary)) {
+      console.log(colors.dim(`session_summary decisions=${extraction.session_summary.decisions.length} open_questions=${extraction.session_summary.open_questions.length} action_items=${extraction.session_summary.action_items.length} topics=${extraction.session_summary.topics.length}`));
+    }
+    console.log(colors.dim(`${extraction.facts.length} fact(s) extracted${extraction.chunks > 1 ? ` across ${extraction.chunks} chunk(s)` : ''}`));
+    return {
+      facts: extraction.facts.length,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      summaryStored: hasSessionSummary(extraction.session_summary)
+    };
+  }
+
+  const db = openDb();
+  const result = applyExtractedFacts(db, extraction.facts);
+  const summaryKey = storeSessionSummary(db, extraction.session_summary);
+  db.close();
+
+  const changedMsg = `inserted=${result.inserted} updated=${result.updated} skipped=${result.skipped}`;
+  const summaryMsg = summaryKey ? ` summary=${summaryKey}` : '';
+  console.log(colors.green(`${file}: extracted=${extraction.facts.length} ${changedMsg}${summaryMsg}`));
+  return {
+    facts: extraction.facts.length,
+    inserted: result.inserted,
+    updated: result.updated,
+    skipped: result.skipped,
+    summaryStored: Boolean(summaryKey)
+  };
 }
 
 function printSimpleList(facts) {
@@ -456,7 +664,7 @@ export function runCli(argv) {
     .description('Prune facts whose TTL has expired')
     .action(() => {
       const db = openDb();
-      const res = db.prepare('DELETE FROM facts WHERE expires_at IS NOT NULL AND expires_at <= ?').run(nowIso());
+      const res = db.prepare("DELETE FROM facts WHERE tier = 'working' AND expires_at IS NOT NULL AND expires_at <= ?").run(nowIso());
       db.close();
 
       console.log(colors.green(`Expired ${res.changes} fact(s)`));
@@ -507,36 +715,51 @@ export function runCli(argv) {
     });
 
   program.command('extract <file>')
-    .description('Extract facts from markdown using Ollama qwen3:8b')
+    .description('Extract facts and session summary from markdown using Ollama')
     .option('--dry-run', 'Print extracted facts without writing')
+    .option('--model <model>', 'Ollama model name', 'qwen3:8b')
+    .option('--verbose', 'Show extraction prompt and raw model response')
     .action(async (file, options) => {
-      const facts = await extractFactsFromFile(file);
-      if (facts.length === 0) {
-        console.log(colors.yellow('No valid facts extracted'));
+      requireFile(file);
+      const res = await runExtractOne(file, options);
+      if (!options.dryRun) {
+        console.log(colors.green(`Stored ${res.facts} extracted fact(s)`));
+      }
+    });
+
+  program.command('extract-all <directory>')
+    .description('Batch extract facts from markdown files in a directory')
+    .option('--pattern <glob>', 'File pattern', '*.md')
+    .option('--since <date>', 'Only process files modified after date (ISO)')
+    .option('--dry-run', 'Print extracted facts without writing')
+    .option('--model <model>', 'Ollama model name', 'qwen3:8b')
+    .option('--verbose', 'Show extraction prompt and raw model response')
+    .action(async (directory, options) => {
+      requireDirectory(directory);
+      const sinceIso = options.since ? parseDate(options.since) : null;
+      const files = listFilesRecursive(directory, options.pattern, sinceIso);
+      if (files.length === 0) {
+        console.log(colors.yellow('No files matched'));
         return;
       }
 
-      if (options.dryRun) {
-        for (const fact of facts) {
-          console.log(`${fact.category}/${fact.key} = ${fact.value} [scope=${fact.scope} tier=${fact.tier} source_type=${fact.source_type} ttl=${fact.ttl ?? 'none'}]`);
-        }
-        console.log(colors.dim(`${facts.length} fact(s) extracted (dry run)`));
-        return;
+      let totalFacts = 0;
+      let totalInserted = 0;
+      let totalUpdated = 0;
+      let totalSkipped = 0;
+      let totalSummaries = 0;
+      for (const file of files) {
+        const res = await runExtractOne(file, options);
+        totalFacts += res.facts;
+        totalInserted += res.inserted;
+        totalUpdated += res.updated;
+        totalSkipped += res.skipped;
+        totalSummaries += res.summaryStored ? 1 : 0;
       }
 
-      const db = openDb();
-      const tx = db.transaction((items) => {
-        for (const fact of items) {
-          upsertFact(db, {
-            ...fact,
-            expires_at: ttlToExpiresAt(fact.ttl),
-            source_type: fact.source_type ?? 'inferred'
-          });
-        }
-      });
-      tx(facts);
-      db.close();
-      console.log(colors.green(`Stored ${facts.length} extracted fact(s)`));
+      const header = options.dryRun ? 'Batch dry-run complete' : 'Batch extract complete';
+      const counts = `files=${files.length} facts=${totalFacts} inserted=${totalInserted} updated=${totalUpdated} skipped=${totalSkipped} summaries=${totalSummaries}`;
+      console.log(colors.green(`${header}: ${counts}`));
     });
 
   program.command('import <file>')
