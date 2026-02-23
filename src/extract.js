@@ -1,13 +1,21 @@
 import fs from 'node:fs';
 import { UserError } from './errors.js';
 
+const VALID_SCOPES = new Set(['global', 'project', 'conversation']);
+const VALID_TIERS = new Set(['working', 'long-term']);
+const VALID_SOURCE_TYPES = new Set(['manual', 'inferred', 'user_said', 'tool_output']);
+
 function buildPrompt(content) {
   return [
     'Extract structured factual memory from the following text.',
-    'Return ONLY a JSON array with objects containing category, key, and value.',
-    'Allowed categories: person, project, preference, decision, lesson, environment, tool.',
+    'Return ONLY a JSON array.',
+    'Each item must include category, key, value, scope, tier, source_type, ttl.',
+    "scope must be one of: global, project, conversation.",
+    "tier must be one of: working, long-term.",
+    "source_type must be one of: manual, inferred, user_said, tool_output.",
+    'ttl must be null or a compact duration string like 24h, 7d, 30m.',
     'Use stable dot-separated keys (e.g., cory.son.name).',
-    'Do not include markdown fences, commentary, or extra fields.',
+    'Do not include markdown fences or any text outside the JSON array.',
     '',
     'Text:',
     content
@@ -74,18 +82,42 @@ export async function extractFactsFromFile(filePath) {
     if (!item || typeof item !== 'object') {
       continue;
     }
-    const { category, key, value } = item;
+
+    const {
+      category,
+      key,
+      value,
+      scope = 'global',
+      tier = 'long-term',
+      source_type: sourceType = 'inferred',
+      ttl = null
+    } = item;
+
     if (
-      typeof category === 'string' && category.trim() &&
-      typeof key === 'string' && key.trim() &&
-      typeof value === 'string' && value.trim()
+      typeof category !== 'string' || !category.trim() ||
+      typeof key !== 'string' || !key.trim() ||
+      typeof value !== 'string' || !value.trim()
     ) {
-      valid.push({
-        category: category.trim(),
-        key: key.trim(),
-        value: value.trim()
-      });
+      continue;
     }
+
+    if (!VALID_SCOPES.has(scope) || !VALID_TIERS.has(tier) || !VALID_SOURCE_TYPES.has(sourceType)) {
+      continue;
+    }
+
+    if (ttl !== null && (typeof ttl !== 'string' || !ttl.trim())) {
+      continue;
+    }
+
+    valid.push({
+      category: category.trim(),
+      key: key.trim(),
+      value: value.trim(),
+      scope,
+      tier,
+      source_type: sourceType,
+      ttl: ttl === null ? null : ttl.trim()
+    });
   }
 
   return valid;

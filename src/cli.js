@@ -7,6 +7,10 @@ import { extractFactsFromFile } from './extract.js';
 import { UserError } from './errors.js';
 
 const DEFAULT_LIMIT = 100;
+const VALID_SCOPES = new Set(['global', 'project', 'conversation']);
+const VALID_TIERS = new Set(['working', 'long-term']);
+const VALID_SOURCE_TYPES = new Set(['manual', 'inferred', 'user_said', 'tool_output']);
+const VALID_RELATION_TYPES = new Set(['related_to', 'part_of', 'decided_by', 'owned_by', 'replaced_by']);
 
 function parseConfidence(value) {
   const n = Number(value);
@@ -32,21 +36,145 @@ function parseDate(value) {
   return d.toISOString();
 }
 
+function parseScope(value) {
+  if (!VALID_SCOPES.has(value)) {
+    throw new UserError('Scope must be one of: global, project, conversation');
+  }
+  return value;
+}
+
+function parseTier(value) {
+  if (!VALID_TIERS.has(value)) {
+    throw new UserError('Tier must be one of: working, long-term');
+  }
+  return value;
+}
+
+function parseSourceType(value) {
+  if (!VALID_SOURCE_TYPES.has(value)) {
+    throw new UserError('Source type must be one of: manual, inferred, user_said, tool_output');
+  }
+  return value;
+}
+
+function parseRelationType(value) {
+  if (!VALID_RELATION_TYPES.has(value)) {
+    throw new UserError(`Relation type must be one of: ${[...VALID_RELATION_TYPES].join(', ')}`);
+  }
+  return value;
+}
+
+function parseDurationMs(value) {
+  const match = String(value).trim().toLowerCase().match(/^(\d+)([smhdw])$/);
+  if (!match) {
+    throw new UserError('TTL must be a compact duration like 30m, 24h, 7d');
+  }
+
+  const amount = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new UserError('TTL duration amount must be a positive integer');
+  }
+
+  const unit = match[2];
+  const multipliers = {
+    s: 1000,
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
+    w: 7 * 24 * 60 * 60 * 1000
+  };
+
+  return amount * multipliers[unit];
+}
+
+function ttlToExpiresAt(ttl) {
+  if (!ttl) {
+    return null;
+  }
+  return new Date(Date.now() + parseDurationMs(ttl)).toISOString();
+}
+
+function formatDuration(ms) {
+  const abs = Math.max(0, Math.floor(ms / 1000));
+  const units = [
+    { size: 86400, label: 'd' },
+    { size: 3600, label: 'h' },
+    { size: 60, label: 'm' },
+    { size: 1, label: 's' }
+  ];
+
+  for (const unit of units) {
+    if (abs >= unit.size) {
+      return `${Math.floor(abs / unit.size)}${unit.label}`;
+    }
+  }
+  return '0s';
+}
+
+function expiresLabel(expiresAt) {
+  if (!expiresAt) {
+    return 'no ttl';
+  }
+
+  const delta = new Date(expiresAt).valueOf() - Date.now();
+  if (!Number.isFinite(delta)) {
+    return 'invalid ttl';
+  }
+
+  if (delta <= 0) {
+    return `expired ${formatDuration(-delta)} ago`;
+  }
+  return `expires in ${formatDuration(delta)}`;
+}
+
 function printFact(fact) {
   const conf = typeof fact.confidence === 'number' ? fact.confidence.toFixed(2) : '1.00';
   const source = fact.source ? ` source=${fact.source}` : '';
-  console.log(`${colors.bold(`${fact.category}/${fact.key}`)} = ${fact.value}${colors.dim(` [confidence=${conf}${source}]`)}`);
+  const meta = ` confidence=${conf} scope=${fact.scope ?? 'global'} tier=${fact.tier ?? 'long-term'} source_type=${fact.source_type ?? 'manual'} ttl=${expiresLabel(fact.expires_at)}`;
+  console.log(`${colors.bold(`${fact.category}/${fact.key}`)} = ${fact.value}${colors.dim(` [${meta}${source}]`)}`);
 }
 
-function upsertFact(db, { category, key, value, source = null, confidence = 1.0 }) {
+function projectTag(slug) {
+  return `[project:${slug}]`;
+}
+
+function withProjectTag(source, project) {
+  if (!project) {
+    return source ?? null;
+  }
+  const tag = projectTag(project);
+  const base = source ? String(source).trim() : '';
+  if (base.includes(tag)) {
+    return base;
+  }
+  return base ? `${base} ${tag}` : tag;
+}
+
+function upsertFact(db, {
+  category,
+  key,
+  value,
+  source = null,
+  confidence = 1.0,
+  scope = 'global',
+  tier = 'long-term',
+  expires_at: expiresAt = null,
+  last_verified: lastVerified = null,
+  source_type: sourceType = 'manual'
+}) {
   const ts = nowIso();
   const stmt = db.prepare(`
-    INSERT INTO facts (category, key, value, source, confidence, created, updated)
-    VALUES (@category, @key, @value, @source, @confidence, @created, @updated)
+    INSERT INTO facts (category, key, value, source, confidence, created, updated, scope, tier, expires_at, last_verified, source_type)
+    VALUES (@category, @key, @value, @source, @confidence, @created, @updated, @scope, @tier, @expires_at, @last_verified, @source_type)
     ON CONFLICT(category, key) DO UPDATE SET
       value = excluded.value,
       source = excluded.source,
       confidence = excluded.confidence,
+      scope = excluded.scope,
+      tier = excluded.tier,
+      expires_at = excluded.expires_at,
+      last_verified = COALESCE(excluded.last_verified, facts.last_verified),
+      source_type = excluded.source_type,
       updated = excluded.updated
   `);
 
@@ -57,7 +185,12 @@ function upsertFact(db, { category, key, value, source = null, confidence = 1.0 
     source,
     confidence,
     created: ts,
-    updated: ts
+    updated: ts,
+    scope,
+    tier,
+    expires_at: expiresAt,
+    last_verified: lastVerified,
+    source_type: sourceType
   });
 }
 
@@ -74,6 +207,42 @@ function printSimpleList(facts) {
   console.log(colors.dim(`${facts.length} fact(s)`));
 }
 
+function parseFactRef(input) {
+  const trimmed = String(input).trim();
+  const slash = trimmed.indexOf('/');
+  if (slash <= 0 || slash === trimmed.length - 1) {
+    throw new UserError(`Invalid fact reference: ${input}. Expected category/key`);
+  }
+
+  return {
+    category: trimmed.slice(0, slash),
+    key: trimmed.slice(slash + 1)
+  };
+}
+
+function getFactByRef(db, input) {
+  const ref = parseFactRef(input);
+  const row = db.prepare('SELECT * FROM facts WHERE category = ? AND key = ?').get(ref.category, ref.key);
+  if (!row) {
+    throw new UserError(`Fact not found: ${ref.category}/${ref.key}`);
+  }
+  return row;
+}
+
+function toFtsQuery(query) {
+  const terms = String(query)
+    .trim()
+    .split(/\s+/)
+    .map((term) => term.replace(/"/g, '""'))
+    .filter(Boolean)
+    .map((term) => `"${term}"*`);
+
+  if (terms.length === 0) {
+    throw new UserError('Search query cannot be empty');
+  }
+  return terms.join(' AND ');
+}
+
 export function runCli(argv) {
   const program = new Command();
 
@@ -86,15 +255,29 @@ export function runCli(argv) {
     .description('Add or update a fact')
     .option('--source <source>', 'Fact source')
     .option('--confidence <n>', 'Confidence score (0-1)', parseConfidence, 1.0)
+    .option('--scope <scope>', 'Fact scope: global|project|conversation', parseScope, 'global')
+    .option('--tier <tier>', 'Memory tier: working|long-term', parseTier, 'long-term')
+    .option('--ttl <duration>', 'Auto-expire duration (e.g., 24h, 7d, 30m)')
+    .option('--source-type <type>', 'manual|inferred|user_said|tool_output', parseSourceType, 'manual')
+    .option('--project <slug>', 'Shortcut: sets scope=project and tags source with project name')
     .action((category, key, value, options) => {
       const db = openDb();
+      const scope = options.project ? 'project' : options.scope;
+      const source = withProjectTag(options.source ?? null, options.project ?? null);
+      const expiresAt = ttlToExpiresAt(options.ttl ?? null);
+
       upsertFact(db, {
         category,
         key,
         value,
-        source: options.source ?? null,
-        confidence: options.confidence
+        source,
+        confidence: options.confidence,
+        scope,
+        tier: options.tier,
+        expires_at: expiresAt,
+        source_type: options.sourceType
       });
+
       db.close();
       console.log(colors.green('Fact saved'));
     });
@@ -118,14 +301,26 @@ export function runCli(argv) {
     });
 
   program.command('search <query>')
-    .description('Search facts across keys and values')
+    .description('Search facts using FTS5 index')
     .action((query) => {
       const db = openDb();
-      const rows = db.prepare(`
-        SELECT * FROM facts
-        WHERE lower(key) LIKE lower(?) OR lower(value) LIKE lower(?)
-        ORDER BY updated DESC
-      `).all(`%${query}%`, `%${query}%`);
+      const ftsQuery = toFtsQuery(query);
+      let rows = db.prepare(`
+        SELECT f.*
+        FROM facts_fts
+        JOIN facts f ON f.id = facts_fts.rowid
+        WHERE facts_fts MATCH ?
+        ORDER BY bm25(facts_fts), f.updated DESC
+      `).all(ftsQuery);
+
+      if (rows.length === 0) {
+        rows = db.prepare(`
+          SELECT * FROM facts
+          WHERE lower(key) LIKE lower(?) OR lower(value) LIKE lower(?)
+          ORDER BY updated DESC
+        `).all(`%${query}%`, `%${query}%`);
+      }
+
       db.close();
 
       if (rows.length === 0) {
@@ -137,23 +332,32 @@ export function runCli(argv) {
   program.command('list')
     .description('List facts with optional filters')
     .option('--category <cat>', 'Filter category')
+    .option('--scope <scope>', 'Filter by scope', parseScope)
+    .option('--tier <tier>', 'Filter by tier', parseTier)
     .option('--limit <n>', 'Limit number of rows', parseLimit, DEFAULT_LIMIT)
     .option('--recent', 'Sort by most recently updated')
     .action((options) => {
       const db = openDb();
       const where = [];
       const params = [];
-      let rows;
 
       if (options.category) {
         where.push('category = ?');
         params.push(options.category);
       }
+      if (options.scope) {
+        where.push('scope = ?');
+        params.push(options.scope);
+      }
+      if (options.tier) {
+        where.push('tier = ?');
+        params.push(options.tier);
+      }
 
       const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
       const orderSql = options.recent ? 'ORDER BY updated DESC' : 'ORDER BY category, key';
       const sql = `SELECT * FROM facts ${whereSql} ${orderSql} LIMIT ?`;
-      rows = db.prepare(sql).all(...params, options.limit);
+      const rows = db.prepare(sql).all(...params, options.limit);
       db.close();
 
       if (rows.length === 0) {
@@ -175,13 +379,122 @@ export function runCli(argv) {
       console.log(colors.green('Fact removed'));
     });
 
+  program.command('link <from> <to>')
+    .description('Link two facts with a relation')
+    .option('--type <relation_type>', 'related_to|part_of|decided_by|owned_by|replaced_by', parseRelationType, 'related_to')
+    .action((from, to, options) => {
+      const db = openDb();
+      const fromFact = getFactByRef(db, from);
+      const toFact = getFactByRef(db, to);
+
+      db.prepare(`
+        INSERT INTO relations (source_fact_id, target_fact_id, relation_type, created)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(source_fact_id, target_fact_id, relation_type) DO NOTHING
+      `).run(fromFact.id, toFact.id, options.type, nowIso());
+
+      db.close();
+      console.log(colors.green(`Linked ${fromFact.category}/${fromFact.key} -> ${toFact.category}/${toFact.key} (${options.type})`));
+    });
+
+  program.command('graph <fact>')
+    .description('Show a fact and connected facts')
+    .action((factRef) => {
+      const db = openDb();
+      const root = getFactByRef(db, factRef);
+      const rows = db.prepare(`
+        SELECT r.relation_type, 'outgoing' AS direction, t.category, t.key, t.value
+        FROM relations r
+        JOIN facts t ON t.id = r.target_fact_id
+        WHERE r.source_fact_id = ?
+        UNION ALL
+        SELECT r.relation_type, 'incoming' AS direction, s.category, s.key, s.value
+        FROM relations r
+        JOIN facts s ON s.id = r.source_fact_id
+        WHERE r.target_fact_id = ?
+        ORDER BY relation_type, direction, category, key
+      `).all(root.id, root.id);
+      db.close();
+
+      console.log(colors.bold(`${root.category}/${root.key}`));
+      console.log(root.value);
+
+      if (rows.length === 0) {
+        console.log(colors.dim('No relations'));
+        return;
+      }
+
+      for (const row of rows) {
+        const arrow = row.direction === 'outgoing' ? '->' : '<-';
+        console.log(`${arrow} (${row.relation_type}) ${row.category}/${row.key}: ${row.value}`);
+      }
+    });
+
+  program.command('working')
+    .description('List all working memory facts and TTL status')
+    .action(() => {
+      const db = openDb();
+      const rows = db.prepare(`
+        SELECT *
+        FROM facts
+        WHERE tier = 'working'
+        ORDER BY CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END, expires_at ASC, updated DESC
+      `).all();
+      db.close();
+
+      if (rows.length === 0) {
+        throw new UserError('No working-memory facts found', 2);
+      }
+
+      for (const fact of rows) {
+        console.log(`${colors.bold(`${fact.category}/${fact.key}`)} = ${fact.value} ${colors.dim(`[${expiresLabel(fact.expires_at)}]`)}`);
+      }
+      console.log(colors.dim(`${rows.length} fact(s)`));
+    });
+
+  program.command('expire')
+    .description('Prune facts whose TTL has expired')
+    .action(() => {
+      const db = openDb();
+      const res = db.prepare('DELETE FROM facts WHERE expires_at IS NOT NULL AND expires_at <= ?').run(nowIso());
+      db.close();
+
+      console.log(colors.green(`Expired ${res.changes} fact(s)`));
+    });
+
   program.command('inject')
     .description('Generate markdown for LLM injection')
     .option('--max <n>', 'Maximum facts', parseLimit, DEFAULT_LIMIT)
+    .option('--scope <scope>', 'Filter by scope', parseScope)
+    .option('--project <slug>', 'Inject global + project-scoped facts tagged for this project')
+    .option('--include-working', 'Include working memory (default is long-term only)')
     .option('--output <file>', 'Write markdown to file')
     .action((options) => {
       const db = openDb();
-      const rows = db.prepare('SELECT * FROM facts ORDER BY updated DESC LIMIT ?').all(options.max);
+      const where = ['(expires_at IS NULL OR expires_at > ?)'];
+      const params = [nowIso()];
+
+      if (options.scope) {
+        where.push('scope = ?');
+        params.push(options.scope);
+      }
+
+      if (!options.includeWorking) {
+        where.push("tier = 'long-term'");
+      }
+
+      if (options.project) {
+        where.push(`(scope = 'global' OR (scope = 'project' AND source LIKE ?))`);
+        params.push(`%${projectTag(options.project)}%`);
+      }
+
+      const sql = `
+        SELECT * FROM facts
+        WHERE ${where.join(' AND ')}
+        ORDER BY CASE WHEN tier = 'working' THEN 0 ELSE 1 END, updated DESC
+        LIMIT ?
+      `;
+      const rows = db.prepare(sql).all(...params, options.max);
       db.close();
 
       const markdown = factsToMarkdown(rows);
@@ -205,7 +518,7 @@ export function runCli(argv) {
 
       if (options.dryRun) {
         for (const fact of facts) {
-          console.log(`${fact.category}/${fact.key} = ${fact.value}`);
+          console.log(`${fact.category}/${fact.key} = ${fact.value} [scope=${fact.scope} tier=${fact.tier} source_type=${fact.source_type} ttl=${fact.ttl ?? 'none'}]`);
         }
         console.log(colors.dim(`${facts.length} fact(s) extracted (dry run)`));
         return;
@@ -214,7 +527,11 @@ export function runCli(argv) {
       const db = openDb();
       const tx = db.transaction((items) => {
         for (const fact of items) {
-          upsertFact(db, fact);
+          upsertFact(db, {
+            ...fact,
+            expires_at: ttlToExpiresAt(fact.ttl),
+            source_type: fact.source_type ?? 'inferred'
+          });
         }
       });
       tx(facts);
@@ -241,23 +558,59 @@ export function runCli(argv) {
         if (!item || typeof item !== 'object') {
           continue;
         }
-        const { category, key, value, source = null, confidence = 1.0 } = item;
+
+        const {
+          category,
+          key,
+          value,
+          source = null,
+          confidence = 1.0,
+          scope = 'global',
+          tier = 'long-term',
+          ttl = null,
+          expires_at: expiresAt = null,
+          source_type: sourceType = 'manual'
+        } = item;
+
         if (
-          typeof category === 'string' && category.trim() &&
-          typeof key === 'string' && key.trim() &&
-          typeof value === 'string' && value.trim()
+          typeof category !== 'string' || !category.trim() ||
+          typeof key !== 'string' || !key.trim() ||
+          typeof value !== 'string' || !value.trim()
         ) {
-          const conf = Number(confidence);
-          if (Number.isFinite(conf) && conf >= 0 && conf <= 1) {
-            clean.push({
-              category: category.trim(),
-              key: key.trim(),
-              value: value.trim(),
-              source: source === null ? null : String(source),
-              confidence: conf
-            });
-          }
+          continue;
         }
+
+        const conf = Number(confidence);
+        if (!Number.isFinite(conf) || conf < 0 || conf > 1) {
+          continue;
+        }
+
+        if (!VALID_SCOPES.has(scope) || !VALID_TIERS.has(tier) || !VALID_SOURCE_TYPES.has(sourceType)) {
+          continue;
+        }
+
+        let finalExpiresAt = null;
+        try {
+          if (ttl != null) {
+            finalExpiresAt = ttlToExpiresAt(String(ttl));
+          } else if (expiresAt != null) {
+            finalExpiresAt = parseDate(String(expiresAt));
+          }
+        } catch {
+          continue;
+        }
+
+        clean.push({
+          category: category.trim(),
+          key: key.trim(),
+          value: value.trim(),
+          source: source == null ? null : String(source),
+          confidence: conf,
+          scope,
+          tier,
+          expires_at: finalExpiresAt,
+          source_type: sourceType
+        });
       }
 
       if (clean.length === 0) {
@@ -299,6 +652,8 @@ export function runCli(argv) {
       const db = openDb();
       const total = db.prepare('SELECT COUNT(*) AS n FROM facts').get().n;
       const byCategory = db.prepare('SELECT category, COUNT(*) AS n FROM facts GROUP BY category ORDER BY category').all();
+      const byScope = db.prepare('SELECT scope, COUNT(*) AS n FROM facts GROUP BY scope ORDER BY scope').all();
+      const byTier = db.prepare('SELECT tier, COUNT(*) AS n FROM facts GROUP BY tier ORDER BY tier').all();
       const latest = db.prepare('SELECT MAX(updated) AS last_updated FROM facts').get().last_updated;
       db.close();
 
@@ -314,6 +669,14 @@ export function runCli(argv) {
       console.log(colors.bold('By category:'));
       for (const row of byCategory) {
         console.log(`- ${row.category}: ${row.n}`);
+      }
+      console.log(colors.bold('By scope:'));
+      for (const row of byScope) {
+        console.log(`- ${row.scope}: ${row.n}`);
+      }
+      console.log(colors.bold('By tier:'));
+      for (const row of byTier) {
+        console.log(`- ${row.tier}: ${row.n}`);
       }
     });
 
