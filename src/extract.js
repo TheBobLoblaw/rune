@@ -6,7 +6,7 @@ const VALID_SCOPES = new Set(['global', 'project', 'conversation']);
 const VALID_TIERS = new Set(['working', 'long-term']);
 const VALID_SOURCE_TYPES = new Set(['manual', 'inferred', 'user_said', 'tool_output']);
 const VALID_CATEGORIES = new Set(['person', 'project', 'preference', 'decision', 'lesson', 'environment', 'tool', 'task']);
-const MAX_WORDS_PER_CHUNK = 10000;
+const MAX_WORDS_PER_CHUNK = 300;
 const OLLAMA_TIMEOUT_MS = 180_000;
 const OPENAI_TIMEOUT_MS = 60_000;
 const ANTHROPIC_TIMEOUT_MS = 60_000;
@@ -15,9 +15,22 @@ const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
+function buildCompactPrompt(content) {
+  return [
+    'Extract key facts from this document as JSON. Return ONLY valid JSON.',
+    '',
+    '{"facts":[{"category":"person|project|preference|decision|lesson|environment|tool","key":"entity.attribute","value":"short fact","scope":"global|project","tier":"long-term","source_type":"user_said|inferred","confidence":0.95}],"session_summary":{"decisions":[],"topics":[]}}',
+    '',
+    'Rules: entity-specific keys (cory.son not person.son), one fact per attribute, max 15 facts, values under 15 words, skip noise.',
+    '',
+    'Document:',
+    content
+  ].join('\n');
+}
+
 function buildPrompt(content) {
   return [
-    'You are a fact extraction system. Read the conversation and extract structured facts as JSON.',
+    'You are a fact extraction system. Read the document (conversation transcript, notes, or log) and extract structured facts as JSON.',
     '',
     'Output format (JSON only, no explanation):',
     '{',
@@ -51,9 +64,13 @@ function buildPrompt(content) {
     '- confidence: 0.95=user explicitly stated verbatim, 0.8=clearly implied, 0.6=inferred/ambiguous',
     '- source_type=user_said when user explicitly states it, inferred when you deduce it',
     '- Ignore noise: greetings, jokes, off-topic chat, brb messages are NOT facts',
+    '- Works on conversations (User:/Assistant:), bullet-point notes, logs, and markdown docs',
+    '- For notes/logs: extract decisions, tools used, people mentioned, lessons learned, project details',
+    '- Keep values SHORT (under 15 words). Capture the fact, not the full sentence.',
+    '- MAX 15 facts per document. Prioritize: people, decisions, lessons, tools. Skip status updates and timestamps.',
     '- Return ONLY valid JSON. No markdown, no explanation, no preamble.',
     '',
-    'Transcript:',
+    'Document:',
     content
   ].join('\n');
 }
@@ -161,6 +178,8 @@ function normalizeFacts(parsed) {
 }
 
 async function generateOnce(content, { model, ollamaUrl, verbose = false }) {
+  // Use compact prompt for shorter/denser docs (notes, logs) to stay within token limits
+  const wordCount = content.trim().split(/\s+/).length;
   const prompt = buildPrompt(content);
 
   if (verbose) {
@@ -182,7 +201,7 @@ async function generateOnce(content, { model, ollamaUrl, verbose = false }) {
         think: false,
         options: {
           temperature: 0.3,
-          num_predict: 2048
+          num_predict: 4096
         }
       }),
       signal: controller.signal
