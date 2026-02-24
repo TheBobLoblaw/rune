@@ -1,4 +1,4 @@
-# Rune &#x16B1; — Revolutionary AI Memory System
+# Rune &#x16B1; — Self-Improving AI Memory System
 
 [![GitHub stars](https://img.shields.io/github/stars/TheBobLoblaw/rune?style=social)](https://github.com/TheBobLoblaw/rune)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -6,9 +6,9 @@
 
 > *Named after Norse runes — secret knowledge carved in stone.*
 
-**🧠 The first production-ready persistent memory system for AI assistants that learns and improves over time.**
+**🧠 The first self-improving memory system that learns, adapts, and gets smarter over time.**
 
-Transform static memory files into intelligent, dynamic memory that grows smarter with use. Get **80% token savings**, perfect recall, and self-improving AI assistants.
+Transform static memory files into intelligent, dynamic memory that evolves with use. Get **80% token savings**, perfect recall, and truly adaptive AI assistants.
 
 **🔥 Featured on ClawHub** | **⭐ Production-tested with 140+ facts** | **🚀 Zero setup required**
 

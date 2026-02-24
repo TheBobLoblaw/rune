@@ -1,8 +1,8 @@
 {
   "name": "rune",
   "version": "1.0.0",
-  "description": "Persistent AI memory system with dynamic context injection and self-improvement",
-  "keywords": ["memory", "context", "intelligence", "self-improvement", "project-management"],
+  "description": "Self-improving AI memory system with intelligent context injection and adaptive learning",
+  "keywords": ["self-improvement", "intelligent-memory", "adaptive", "context-injection", "project-management"],
   "author": "Brokkr AI",
   "license": "MIT",
   "openclaw": {
