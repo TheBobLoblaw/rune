@@ -1452,6 +1452,278 @@ export function runCli(argv) {
       }
     });
 
+  program.command('consolidate')
+    .description('Memory consolidation - merge, compress, prioritize facts (Phase 9: T-049)')
+    .option('--dry-run', 'Show what would be consolidated without changes')
+    .option('--similarity-threshold <n>', 'Similarity threshold for merging (0.0-1.0)', '0.8')
+    .option('--compress-long', 'Compress facts longer than 200 chars')
+    .option('--auto-prioritize', 'Auto-prioritize by access patterns')
+    .action(async (options) => {
+      try {
+        const { consolidateMemory } = await import('./advanced-memory.js');
+        
+        const result = await consolidateMemory({
+          dryRun: options.dryRun,
+          similarityThreshold: parseFloat(options.similarityThreshold) || 0.8,
+          compressLong: options.compressLong,
+          autoPrioritize: options.autoPrioritize
+        });
+        
+        if (options.dryRun) {
+          console.log(colors.bold('🔍 Consolidation Preview (Dry Run)'));
+          console.log('');
+          
+          if (result.merges.length > 0) {
+            console.log(colors.bold('Potential Merges:'));
+            result.merges.forEach((merge, idx) => {
+              console.log(`${idx + 1}. Merge ${merge.sources.length} similar facts:`);
+              console.log(`   Key: ${merge.newKey}`);
+              console.log(`   Value: ${merge.newValue.substring(0, 100)}...`);
+              console.log('');
+            });
+          }
+          
+          if (result.compressions.length > 0) {
+            console.log(colors.bold('Potential Compressions:'));
+            result.compressions.forEach((comp, idx) => {
+              console.log(`${idx + 1}. ${comp.key}: ${comp.oldLength} → ${comp.newLength} chars`);
+            });
+            console.log('');
+          }
+        } else {
+          console.log(colors.green(`✅ Consolidation complete:`));
+          console.log(`   • ${result.merged} fact(s) merged`);
+          console.log(`   • ${result.compressed} fact(s) compressed`);
+          console.log(`   • ${result.prioritized} fact(s) re-prioritized`);
+          console.log(`   • Freed ${result.spaceSaved} characters`);
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Consolidation failed: ${err.message}`));
+      }
+    });
+
+  program.command('forget')
+    .description('Apply forgetting curve - reduce confidence and prune unused facts (Phase 9: T-050)')
+    .option('--dry-run', 'Show what would be forgotten without changes')
+    .option('--decay-rate <n>', 'Confidence decay rate per day', '0.05')
+    .option('--prune-threshold <n>', 'Confidence threshold for pruning', '0.1')
+    .option('--grace-days <n>', 'Grace period before decay starts', '30')
+    .action(async (options) => {
+      try {
+        const { applyForgettingCurve } = await import('./advanced-memory.js');
+        
+        const result = await applyForgettingCurve({
+          dryRun: options.dryRun,
+          decayRate: parseFloat(options.decayRate) || 0.05,
+          pruneThreshold: parseFloat(options.pruneThreshold) || 0.1,
+          graceDays: parseInt(options.graceDays, 10) || 30
+        });
+        
+        if (options.dryRun) {
+          console.log(colors.bold('🧠 Forgetting Curve Preview (Dry Run)'));
+          console.log('');
+          
+          if (result.toDecay.length > 0) {
+            console.log(colors.bold('Facts with Reduced Confidence:'));
+            result.toDecay.slice(0, 10).forEach(fact => {
+              console.log(`   ${fact.key}: ${fact.oldConfidence.toFixed(3)} → ${fact.newConfidence.toFixed(3)}`);
+            });
+            if (result.toDecay.length > 10) {
+              console.log(`   ...and ${result.toDecay.length - 10} more`);
+            }
+            console.log('');
+          }
+          
+          if (result.toPrune.length > 0) {
+            console.log(colors.bold('Facts to Archive (Low Confidence):'));
+            result.toPrune.forEach(fact => {
+              console.log(`   ${fact.key}: confidence ${fact.confidence.toFixed(3)} (unused for ${fact.daysSinceAccess} days)`);
+            });
+            console.log('');
+          }
+        } else {
+          console.log(colors.green(`✅ Forgetting curve applied:`));
+          console.log(`   • ${result.decayed} fact(s) had confidence reduced`);
+          console.log(`   • ${result.archived} fact(s) archived to forgetting_archive`);
+          console.log(`   • Average confidence change: ${result.avgDecay.toFixed(3)}`);
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Forgetting curve failed: ${err.message}`));
+      }
+    });
+
+  program.command('temporal <query>')
+    .description('Temporal queries - "what were we working on last Tuesday?" (Phase 9: T-051)')
+    .option('--json', 'Output as JSON')
+    .option('--limit <n>', 'Max results to return', '20')
+    .action(async (query, options) => {
+      try {
+        const { executeTemporalQuery } = await import('./advanced-memory.js');
+        
+        const result = await executeTemporalQuery(query, {
+          limit: parseInt(options.limit, 10) || 20
+        });
+        
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        
+        console.log(colors.bold(`⏰ Temporal Query: "${query}"`));
+        console.log('');
+        
+        if (!result.timeframe) {
+          console.log(colors.yellow('Could not parse timeframe from query'));
+          return;
+        }
+        
+        console.log(`**Timeframe:** ${result.timeframe.description}`);
+        console.log(`**Period:** ${result.timeframe.startDate} to ${result.timeframe.endDate}`);
+        console.log('');
+        
+        if (result.facts.length > 0) {
+          console.log(colors.bold('📋 Facts from that period:'));
+          result.facts.forEach(fact => {
+            console.log(`   ${fact.category}/${fact.key}: ${fact.value}`);
+            console.log(colors.dim(`   (${fact.updated.substring(0, 10)})`));
+          });
+          console.log('');
+        }
+        
+        if (result.events.length > 0) {
+          console.log(colors.bold('📊 Events from that period:'));
+          result.events.forEach(event => {
+            const icon = event.event_type === 'success' ? '✅' : event.event_type === 'mistake' ? '❌' : '📝';
+            console.log(`   ${icon} ${event.detail}`);
+            console.log(colors.dim(`   (${event.created.substring(0, 10)})`));
+          });
+          console.log('');
+        }
+        
+        if (result.projects.length > 0) {
+          console.log(colors.bold('🚧 Projects active then:'));
+          result.projects.forEach(project => {
+            console.log(`   ${project.name}: ${project.phase} (${project.active_task || 'no active task'})`);
+          });
+          console.log('');
+        }
+        
+        console.log(colors.dim(`${result.facts.length} fact(s), ${result.events.length} event(s), ${result.projects.length} project(s)`));
+        
+      } catch (err) {
+        console.log(colors.red(`Temporal query failed: ${err.message}`));
+      }
+    });
+
+  program.command('cross-session')
+    .description('Cross-session reasoning - detect patterns across all sessions (Phase 9: T-052)')
+    .option('--days <n>', 'Analysis period in days', '90')
+    .option('--pattern-type <type>', 'Focus on specific pattern type')
+    .option('--min-sessions <n>', 'Minimum sessions for pattern', '3')
+    .action(async (options) => {
+      try {
+        const { analyzeCrossSessionPatterns } = await import('./advanced-memory.js');
+        
+        const result = await analyzeCrossSessionPatterns({
+          days: parseInt(options.days, 10) || 90,
+          patternType: options.patternType,
+          minSessions: parseInt(options.minSessions, 10) || 3
+        });
+        
+        console.log(colors.bold(`🔄 Cross-Session Pattern Analysis (${options.days} days)`));
+        console.log('');
+        
+        if (result.sessionPatterns.length > 0) {
+          console.log(colors.bold('📊 Session Patterns:'));
+          result.sessionPatterns.forEach((pattern, idx) => {
+            console.log(`${idx + 1}. **${pattern.trigger}** → **${pattern.outcome}**`);
+            console.log(`   Frequency: ${pattern.frequency} sessions`);
+            console.log(`   Confidence: ${(pattern.confidence * 100).toFixed(1)}%`);
+            console.log(`   Example: ${pattern.example}`);
+            console.log('');
+          });
+        }
+        
+        if (result.behaviorPatterns.length > 0) {
+          console.log(colors.bold('🎯 Behavior Patterns:'));
+          result.behaviorPatterns.forEach(pattern => {
+            console.log(`   • ${pattern.description}`);
+            console.log(`     Observed in ${pattern.sessionCount} session(s)`);
+          });
+          console.log('');
+        }
+        
+        if (result.insights.length > 0) {
+          console.log(colors.bold('💡 Cross-Session Insights:'));
+          result.insights.forEach(insight => {
+            console.log(`   • ${insight}`);
+          });
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Cross-session analysis failed: ${err.message}`));
+      }
+    });
+
+  program.command('decision-changelog [decision]')
+    .description('Full audit trail of decision changes (Phase 9: T-053)')
+    .option('--limit <n>', 'Max entries to show', '20')
+    .option('--json', 'Output as JSON')
+    .action(async (decision, options) => {
+      try {
+        const { getDecisionChangelog } = await import('./advanced-memory.js');
+        
+        const result = await getDecisionChangelog(decision, {
+          limit: parseInt(options.limit, 10) || 20
+        });
+        
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        
+        if (decision) {
+          console.log(colors.bold(`📜 Decision History: "${decision}"`));
+        } else {
+          console.log(colors.bold('📜 All Decision Changes'));
+        }
+        console.log('');
+        
+        if (result.changes.length === 0) {
+          console.log(colors.yellow('No decision changes found'));
+          return;
+        }
+        
+        result.changes.forEach((change, idx) => {
+          const icon = change.change_type === 'created' ? '🆕' : 
+                      change.change_type === 'updated' ? '📝' : 
+                      change.change_type === 'contradicted' ? '🔄' : '❓';
+          
+          console.log(`${icon} **${change.key}** (${change.created.substring(0, 10)})`);
+          
+          if (change.change_type === 'created') {
+            console.log(`   Initial: ${change.new_value}`);
+          } else if (change.change_type === 'updated' || change.change_type === 'contradicted') {
+            console.log(`   From: ${change.old_value}`);
+            console.log(`   To: ${change.new_value}`);
+          }
+          
+          if (change.source) {
+            console.log(colors.dim(`   Source: ${change.source}`));
+          }
+          
+          console.log('');
+        });
+        
+        console.log(colors.dim(`${result.changes.length} change(s) shown`));
+        
+      } catch (err) {
+        console.log(colors.red(`Decision changelog failed: ${err.message}`));
+      }
+    });
+
   program.command('recall <topic>')
     .description('Smart recall — pull all relevant context for a topic (facts, decisions, lessons, people, history)')
     .option('--json', 'Output as JSON for programmatic use')
