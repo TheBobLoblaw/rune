@@ -989,6 +989,184 @@ export function runCli(argv) {
       }
     });
 
+  program.command('project-state [project]')
+    .description('Track and manage project states (Phase 6: T-034)')
+    .option('--set-phase <phase>', 'Set project phase (planning, building, testing, deploying, complete)')
+    .option('--set-task <task>', 'Set active task')
+    .option('--add-blocker <blocker>', 'Add a blocker')
+    .option('--resolve-blocker <id>', 'Mark blocker as resolved')
+    .option('--next-steps <steps>', 'Set next steps')
+    .option('--list-all', 'List all projects')
+    .option('--json', 'Output as JSON')
+    .action(async (project, options) => {
+      try {
+        const { getProjectState, updateProjectState, listAllProjects } = await import('./autopilot.js');
+        
+        if (options.listAll) {
+          const projects = listAllProjects();
+          
+          if (options.json) {
+            console.log(JSON.stringify(projects, null, 2));
+            return;
+          }
+          
+          console.log(colors.bold('📋 All Projects'));
+          console.log('');
+          
+          if (projects.length === 0) {
+            console.log(colors.yellow('No projects found'));
+            return;
+          }
+          
+          projects.forEach(proj => {
+            console.log(colors.bold(`${proj.name}`));
+            console.log(`  Phase: ${proj.phase}`);
+            console.log(`  Active Task: ${proj.active_task || 'none'}`);
+            console.log(`  Blockers: ${proj.blockers || 0}`);
+            console.log(`  Updated: ${proj.updated.substring(0, 10)}`);
+            console.log('');
+          });
+          
+          return;
+        }
+        
+        if (!project) {
+          console.log(colors.red('Project name required (or use --list-all)'));
+          return;
+        }
+        
+        // Handle updates
+        const updates = {};
+        if (options.setPhase) updates.phase = options.setPhase;
+        if (options.setTask) updates.active_task = options.setTask;
+        if (options.nextSteps) updates.next_steps = options.nextSteps;
+        
+        if (Object.keys(updates).length > 0) {
+          updateProjectState(project, updates);
+          console.log(colors.green(`Updated ${project}`));
+        }
+        
+        // Handle blockers
+        if (options.addBlocker) {
+          updateProjectState(project, { add_blocker: options.addBlocker });
+          console.log(colors.yellow(`Added blocker to ${project}`));
+        }
+        
+        if (options.resolveBlocker) {
+          updateProjectState(project, { resolve_blocker: parseInt(options.resolveBlocker) });
+          console.log(colors.green(`Resolved blocker for ${project}`));
+        }
+        
+        // Show current state
+        const state = getProjectState(project);
+        
+        if (options.json) {
+          console.log(JSON.stringify(state, null, 2));
+          return;
+        }
+        
+        console.log(colors.bold(`📊 Project: ${project}`));
+        console.log('');
+        console.log(`Phase: ${state.phase}`);
+        console.log(`Active Task: ${state.active_task || 'none'}`);
+        console.log(`Next Steps: ${state.next_steps || 'none'}`);
+        console.log(`Blockers: ${state.blockers?.length || 0}`);
+        
+        if (state.blockers && state.blockers.length > 0) {
+          console.log('');
+          console.log(colors.bold('Blockers:'));
+          state.blockers.forEach((blocker, idx) => {
+            console.log(`  ${idx + 1}. ${blocker.description} (${blocker.created.substring(0, 10)})`);
+          });
+        }
+        
+        console.log('');
+        console.log(`Last Updated: ${state.updated}`);
+        
+      } catch (err) {
+        console.log(colors.red(`Project state failed: ${err.message}`));
+      }
+    });
+
+  program.command('next-task')
+    .description('Smart task picker - what should I work on next? (Phase 6: T-036)')
+    .option('--skip-blocked', 'Skip projects with active blockers', false)
+    .option('--json', 'Output as JSON')
+    .action(async (options) => {
+      try {
+        const { getNextTask } = await import('./autopilot.js');
+        
+        const nextTask = getNextTask({ skipBlocked: options.skipBlocked });
+        
+        if (!nextTask) {
+          console.log(colors.yellow('No unblocked tasks found'));
+          return;
+        }
+        
+        if (options.json) {
+          console.log(JSON.stringify(nextTask, null, 2));
+          return;
+        }
+        
+        console.log(colors.bold('🎯 Recommended Next Task'));
+        console.log('');
+        console.log(colors.bold(`Project: ${nextTask.name}`));
+        console.log(`Phase: ${nextTask.phase}`);
+        console.log(`Priority: ${nextTask.priority}`);
+        console.log(`Active Task: ${nextTask.active_task || 'none'}`);
+        console.log(`Next Steps: ${nextTask.next_steps || 'none'}`);
+        console.log(`Score: ${nextTask.score?.toFixed(1) || 'N/A'}`);
+        
+        if (nextTask.last_activity) {
+          const daysSince = Math.floor((Date.now() - new Date(nextTask.last_activity).getTime()) / (1000 * 60 * 60 * 24));
+          console.log(`Last Activity: ${daysSince} day(s) ago`);
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Task picker failed: ${err.message}`));
+      }
+    });
+
+  program.command('stuck-projects')
+    .description('Detect projects blocked too long (Phase 6: T-037)')
+    .option('--hours <n>', 'Consider stuck after N hours', '48')
+    .option('--json', 'Output as JSON')
+    .action(async (options) => {
+      try {
+        const { detectStuckProjects } = await import('./autopilot.js');
+        
+        const hours = parseInt(options.hours, 10) || 48;
+        const stuckProjects = detectStuckProjects(hours);
+        
+        if (options.json) {
+          console.log(JSON.stringify(stuckProjects, null, 2));
+          return;
+        }
+        
+        if (stuckProjects.length === 0) {
+          console.log(colors.green(`No projects stuck longer than ${hours} hours`));
+          return;
+        }
+        
+        console.log(colors.bold(`🚨 Projects Stuck > ${hours}h`));
+        console.log('');
+        
+        stuckProjects.forEach(project => {
+          const stuckDays = Math.floor((Date.now() - new Date(project.oldest_blocker).getTime()) / (1000 * 60 * 60 * 24));
+          console.log(colors.red(`${project.name}`));
+          console.log(`  Blocked for: ${stuckDays} day(s)`);
+          console.log(`  Phase: ${project.phase}`);
+          console.log(`  Blockers: ${project.blocker_count}`);
+          console.log('');
+        });
+        
+        console.log(colors.yellow('💡 These projects may need intervention'));
+        
+      } catch (err) {
+        console.log(colors.red(`Stuck detection failed: ${err.message}`));
+      }
+    });
+
   program.command('recall <topic>')
     .description('Smart recall — pull all relevant context for a topic (facts, decisions, lessons, people, history)')
     .option('--json', 'Output as JSON for programmatic use')
