@@ -1167,6 +1167,164 @@ export function runCli(argv) {
       }
     });
 
+  program.command('notify <message>')
+    .description('Smart notification classification and routing (Phase 7: T-039)')
+    .option('--channel <channel>', 'Target channel (dm, discord, system)', 'dm')
+    .option('--force-send', 'Send immediately regardless of timing')
+    .option('--dry-run', 'Classify only, don\'t send')
+    .option('--context <text>', 'Additional context for classification')
+    .action(async (message, options) => {
+      try {
+        const { classifyNotification, routeNotification } = await import('./notifications.js');
+        
+        const classification = await classifyNotification(message, {
+          context: options.context,
+          channel: options.channel
+        });
+        
+        if (options.dryRun) {
+          console.log(colors.bold('📋 Notification Classification'));
+          console.log('');
+          console.log(`**Priority:** ${classification.priority}`);
+          console.log(`**Category:** ${classification.category}`);
+          console.log(`**Urgency:** ${classification.urgency}`);
+          console.log(`**Send Now:** ${classification.sendNow ? 'Yes' : 'No'}`);
+          console.log(`**Channel:** ${classification.suggestedChannel}`);
+          console.log(`**Reasoning:** ${classification.reasoning}`);
+          
+          if (classification.holdUntil) {
+            console.log(`**Hold Until:** ${classification.holdUntil}`);
+          }
+          
+          return;
+        }
+        
+        // Route the notification
+        const result = await routeNotification(message, classification, {
+          forceSend: options.forceSend,
+          targetChannel: options.channel
+        });
+        
+        if (result.sent) {
+          console.log(colors.green(`✅ Sent ${classification.priority} notification via ${result.channel}`));
+        } else {
+          console.log(colors.yellow(`🕐 Queued ${classification.priority} notification (${result.reason})`));
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Notification failed: ${err.message}`));
+      }
+    });
+
+  program.command('pending-notifications')
+    .description('Show queued notifications waiting for good timing (Phase 7: T-040)')
+    .option('--send-all', 'Send all pending notifications now')
+    .option('--json', 'Output as JSON')
+    .action(async (options) => {
+      try {
+        const { getPendingNotifications, sendPendingNotifications } = await import('./notifications.js');
+        
+        const pending = getPendingNotifications();
+        
+        if (options.sendAll && pending.length > 0) {
+          const results = await sendPendingNotifications();
+          console.log(colors.green(`Sent ${results.sent} notification(s), ${results.held} still pending`));
+          return;
+        }
+        
+        if (options.json) {
+          console.log(JSON.stringify(pending, null, 2));
+          return;
+        }
+        
+        if (pending.length === 0) {
+          console.log(colors.green('No pending notifications'));
+          return;
+        }
+        
+        console.log(colors.bold(`📬 ${pending.length} Pending Notification(s)`));
+        console.log('');
+        
+        pending.forEach((notif, idx) => {
+          const icon = notif.priority === 'critical' ? '🚨' : notif.priority === 'high' ? '⚠️' : '📋';
+          console.log(`${icon} **${notif.priority}** (${notif.category})`);
+          console.log(`   ${notif.message.substring(0, 80)}${notif.message.length > 80 ? '...' : ''}`);
+          console.log(`   Hold until: ${notif.hold_until || 'good timing'}`);
+          console.log(`   Age: ${Math.floor((Date.now() - new Date(notif.created).getTime()) / (1000 * 60))}m`);
+          console.log('');
+        });
+        
+      } catch (err) {
+        console.log(colors.red(`Pending notifications failed: ${err.message}`));
+      }
+    });
+
+  program.command('digest')
+    .description('Generate daily summary of everything while away (Phase 7: T-042)')
+    .option('--days <n>', 'Look back N days', '1')
+    .option('--format <fmt>', 'Output format: markdown, text, json', 'markdown')
+    .option('--send', 'Send digest via notifications')
+    .option('--channel <ch>', 'Channel for sending', 'dm')
+    .action(async (options) => {
+      try {
+        const { generateDigest } = await import('./notifications.js');
+        
+        const days = parseInt(options.days, 10) || 1;
+        const digest = await generateDigest(days, {
+          format: options.format,
+          includeMetrics: true
+        });
+        
+        if (options.send) {
+          const { routeNotification } = await import('./notifications.js');
+          
+          await routeNotification(digest.content, {
+            priority: 'medium',
+            category: 'system', 
+            suggestedChannel: options.channel,
+            sendNow: true
+          });
+          
+          console.log(colors.green(`Digest sent via ${options.channel}`));
+        } else {
+          console.log(digest.content);
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Digest generation failed: ${err.message}`));
+      }
+    });
+
+  program.command('batch-send')
+    .description('Send batched low-priority notifications (Phase 7: T-043)')
+    .option('--category <cat>', 'Send only specific category')
+    .option('--force', 'Send all pending regardless of timing')
+    .option('--max <n>', 'Max notifications to send', '10')
+    .action(async (options) => {
+      try {
+        const { batchSendNotifications } = await import('./notifications.js');
+        
+        const result = await batchSendNotifications({
+          category: options.category,
+          force: options.force,
+          maxCount: parseInt(options.max, 10) || 10
+        });
+        
+        if (result.batched > 0) {
+          console.log(colors.green(`📦 Sent batch: ${result.batched} notifications in ${result.messages} message(s)`));
+        } else {
+          console.log(colors.yellow('No notifications ready for batching'));
+        }
+        
+        if (result.held > 0) {
+          console.log(colors.dim(`${result.held} notifications still pending`));
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Batch send failed: ${err.message}`));
+      }
+    });
+
   program.command('recall <topic>')
     .description('Smart recall — pull all relevant context for a topic (facts, decisions, lessons, people, history)')
     .option('--json', 'Output as JSON for programmatic use')
