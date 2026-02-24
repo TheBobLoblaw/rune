@@ -1325,6 +1325,133 @@ export function runCli(argv) {
       }
     });
 
+  program.command('self-review')
+    .description('Weekly self-improvement review (Phase 8: T-048)')
+    .option('--days <n>', 'Review period in days', '7')
+    .option('--auto-inject', 'Automatically promote top lessons to context')
+    .option('--save', 'Save review insights to facts')
+    .action(async (options) => {
+      try {
+        const { generateSelfReview, analyzePatterns } = await import('./self-improvement.js');
+        
+        const days = parseInt(options.days, 10) || 7;
+        const review = await generateSelfReview(days, {
+          autoInject: options.autoInject,
+          save: options.save
+        });
+        
+        console.log(review.content);
+        
+        if (review.improvements > 0) {
+          console.log('');
+          console.log(colors.green(`✅ Made ${review.improvements} improvement(s)`));
+        }
+        
+        if (review.patterns.length > 0) {
+          console.log('');
+          console.log(colors.yellow('🔍 Patterns detected:'));
+          review.patterns.forEach(pattern => {
+            console.log(`  • ${pattern.description} (${pattern.frequency}x)`);
+          });
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Self-review failed: ${err.message}`));
+      }
+    });
+
+  program.command('pattern-analysis')
+    .description('Detect repetitive mistakes and behaviors (Phase 8: T-045)')
+    .option('--days <n>', 'Analysis period in days', '30')
+    .option('--min-frequency <n>', 'Minimum pattern frequency', '2')
+    .option('--escalate', 'Auto-escalate critical patterns')
+    .action(async (options) => {
+      try {
+        const { analyzePatterns, escalatePatterns } = await import('./self-improvement.js');
+        
+        const days = parseInt(options.days, 10) || 30;
+        const minFreq = parseInt(options.minFrequency, 10) || 2;
+        
+        const patterns = await analyzePatterns(days, { minFrequency: minFreq });
+        
+        if (patterns.length === 0) {
+          console.log(colors.green('No significant patterns detected'));
+          return;
+        }
+        
+        console.log(colors.bold(`🔍 Pattern Analysis (${days} days)`));
+        console.log('');
+        
+        patterns.forEach(pattern => {
+          const icon = pattern.severity === 'critical' ? '🚨' : 
+                      pattern.severity === 'warning' ? '⚠️' : '📊';
+          
+          console.log(`${icon} **${pattern.type}** (${pattern.frequency}x)`);
+          console.log(`   ${pattern.description}`);
+          console.log(`   Trend: ${pattern.trend || 'stable'}`);
+          
+          if (pattern.suggestions) {
+            console.log(`   💡 ${pattern.suggestions}`);
+          }
+          console.log('');
+        });
+        
+        if (options.escalate) {
+          const escalated = escalatePatterns(patterns);
+          if (escalated.length > 0) {
+            console.log(colors.red(`🚨 Escalated ${escalated.length} critical pattern(s)`));
+          }
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Pattern analysis failed: ${err.message}`));
+      }
+    });
+
+  program.command('skill-usage')
+    .description('Track which skills are used vs neglected (Phase 8: T-047)')
+    .option('--days <n>', 'Analysis period in days', '30')
+    .option('--suggest', 'Suggest underused skills')
+    .action(async (options) => {
+      try {
+        const { analyzeSkillUsage } = await import('./self-improvement.js');
+        
+        const days = parseInt(options.days, 10) || 30;
+        const analysis = await analyzeSkillUsage(days, {
+          suggest: options.suggest
+        });
+        
+        console.log(colors.bold(`🛠️ Skill Usage Analysis (${days} days)`));
+        console.log('');
+        
+        if (analysis.used.length > 0) {
+          console.log(colors.bold('✅ Most Used Skills:'));
+          analysis.used.slice(0, 10).forEach((skill, idx) => {
+            console.log(`  ${idx + 1}. ${skill.skill} (${skill.count}x)`);
+          });
+          console.log('');
+        }
+        
+        if (analysis.neglected.length > 0) {
+          console.log(colors.bold('⚠️ Neglected Skills:'));
+          analysis.neglected.slice(0, 5).forEach(skill => {
+            console.log(`  • ${skill.skill} (last used: ${skill.lastUsed || 'never'})`);
+          });
+          console.log('');
+        }
+        
+        if (options.suggest && analysis.suggestions.length > 0) {
+          console.log(colors.bold('💡 Suggestions:'));
+          analysis.suggestions.forEach(suggestion => {
+            console.log(`  • ${suggestion}`);
+          });
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Skill usage analysis failed: ${err.message}`));
+      }
+    });
+
   program.command('recall <topic>')
     .description('Smart recall — pull all relevant context for a topic (facts, decisions, lessons, people, history)')
     .option('--json', 'Output as JSON for programmatic use')
