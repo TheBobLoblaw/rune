@@ -12,7 +12,11 @@ fi
 NODE_VERSION=$(node --version | sed 's/v//')
 REQUIRED_VERSION="18.0.0"
 
-if ! node -e "process.exit(require('semver').gte('$NODE_VERSION', '$REQUIRED_VERSION') ? 0 : 1)" 2>/dev/null; then
+# Simple version check without semver dependency
+NODE_MAJOR=$(echo $NODE_VERSION | cut -d. -f1)
+REQUIRED_MAJOR=18
+
+if [ "$NODE_MAJOR" -lt "$REQUIRED_MAJOR" ]; then
     echo "❌ Node.js >= $REQUIRED_VERSION is required. Current version: $NODE_VERSION"
     exit 1
 fi

@@ -118,7 +118,7 @@ brokkr-mem session-style "$MESSAGE" --save --session-id "$SESSION_ID"
 - **SQLite Database**: All memory stored in `~/.openclaw/memory.db`
 - **Local LLM Integration**: Ollama for relevance scoring and extraction
 - **Cloud API Support**: Anthropic, OpenAI for advanced reasoning
-- **Zero External Dependencies**: No vector databases or cloud services required
+- **Local-First Design**: Works completely offline with Ollama (cloud APIs optional for advanced features)
 
 ## Memory Categories
 
@@ -128,7 +128,35 @@ brokkr-mem session-style "$MESSAGE" --save --session-id "$SESSION_ID"
 - **lesson**: Mistakes to avoid, best practices
 - **decision**: Why certain choices were made
 - **preference**: User likes/dislikes, settings
-- **environment**: System configs, credentials, endpoints
+- **environment**: System configs, non-sensitive settings (⚠️ NEVER store credentials!)
+
+## ⚠️ Security & Privacy
+
+**What Rune Stores:**
+- Facts you explicitly add via `brokkr-mem add`
+- Session interaction patterns for learning (conversation style, not content)
+- Project states and task recommendations
+
+**What Rune Does NOT Store (by default):**
+- Full conversation transcripts (unless you run `extract` manually)
+- API keys or credentials (use environment variables instead)
+- Sensitive personal information (unless you explicitly add it)
+
+**Cloud API Usage:**
+- **Optional**: Rune can use OpenAI/Anthropic APIs for fact extraction and scoring
+- **Local-first**: Works completely offline with Ollama (recommended)
+- **Your choice**: Configure which engines to use in your setup
+
+**Privacy Best Practices:**
+- Never run `brokkr-mem add` with sensitive data (passwords, API keys, personal info)
+- Use `brokkr-mem extract` carefully - review files before extracting facts
+- Configure Ollama for local-only operation if you want zero cloud usage
+- Review your `~/.openclaw/workspace/FACTS.md` periodically
+
+**Installation Changes:**
+- Adds memory maintenance commands to `HEARTBEAT.md` (if present)
+- Creates `~/.openclaw/memory.db` database file
+- Session hooks may process conversation metadata (not full content) for learning
 
 ## Performance Metrics
 
