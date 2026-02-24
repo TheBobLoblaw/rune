@@ -1,0 +1,71 @@
+{
+  "name": "rune",
+  "version": "1.0.0",
+  "description": "Persistent AI memory system with dynamic context injection and self-improvement",
+  "keywords": ["memory", "context", "intelligence", "self-improvement", "project-management"],
+  "author": "Brokkr AI",
+  "license": "MIT",
+  "openclaw": {
+    "minVersion": "2026.2.0",
+    "compatibility": ["linux", "darwin", "win32"]
+  },
+  "dependencies": {
+    "node": ">=18.0.0",
+    "sqlite3": "^5.1.0",
+    "node-fetch": "^3.0.0"
+  },
+  "systemRequirements": {
+    "disk": "50MB",
+    "ram": "128MB",
+    "optionalServices": ["ollama"]
+  },
+  "commands": [
+    "brokkr-mem",
+    "rune"
+  ],
+  "hooks": {
+    "install": "./install.sh",
+    "uninstall": "./uninstall.sh",
+    "update": "./update.sh"
+  },
+  "config": {
+    "database": "~/.openclaw/memory.db",
+    "ollamaUrl": "http://localhost:11434",
+    "defaultModel": "llama3.1:8b",
+    "maxFacts": 10000,
+    "defaultThreshold": 0.4
+  },
+  "integrations": {
+    "heartbeat": {
+      "commands": [
+        "brokkr-mem expire",
+        "brokkr-mem inject --output ~/.openclaw/workspace/FACTS.md"
+      ],
+      "frequency": "every 4 hours"
+    },
+    "sessionStart": {
+      "commands": [
+        "brokkr-mem recall \"$MESSAGE\" --limit 10"
+      ]
+    },
+    "sessionEnd": {
+      "commands": [
+        "brokkr-mem session-style \"$MESSAGE\" --save"
+      ]
+    }
+  },
+  "categories": [
+    "memory",
+    "intelligence", 
+    "automation",
+    "productivity"
+  ],
+  "tags": [
+    "ai-memory",
+    "context-injection",
+    "self-improvement",
+    "project-management",
+    "sqlite",
+    "local-first"
+  ]
+}

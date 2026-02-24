@@ -1,0 +1,17 @@
+{
+  "name": "brokkr-mem",
+  "version": "1.0.0",
+  "description": "Persistent fact memory CLI for Brokkr",
+  "type": "module",
+  "bin": {
+    "brokkr-mem": "./bin/cli.js"
+  },
+  "scripts": {
+    "test:commands": "node ./scripts/test-commands.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "latest",
+    "commander": "latest",
+    "node-fetch": "^3.3.2"
+  }
+}
