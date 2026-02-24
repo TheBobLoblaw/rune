@@ -130,6 +130,44 @@ Add to your `HEARTBEAT.md`:
 - `brokkr-mem consolidate --auto-prioritize` — optimize memory (weekly)
 ```
 
+## Automated Maintenance & Cron Jobs
+
+For optimal performance, Rune benefits from regular maintenance. Here are recommended automation schedules:
+
+### Daily Maintenance
+```bash
+# Add to crontab: crontab -e
+# Daily at 3 AM - expire old working memory and regenerate context
+0 3 * * * /usr/local/bin/brokkr-mem expire && /usr/local/bin/brokkr-mem inject --output ~/.openclaw/workspace/FACTS.md
+```
+
+### Weekly Maintenance  
+```bash
+# Weekly on Sunday at 2 AM - consolidate memory and self-review
+0 2 * * 0 /usr/local/bin/brokkr-mem consolidate --auto-prioritize && /usr/local/bin/brokkr-mem self-review --days 7
+```
+
+### Monthly Deep Cleaning
+```bash
+# First day of month at 1 AM - pattern analysis and optimization
+0 1 1 * * /usr/local/bin/brokkr-mem pattern-analysis --days 30 && sqlite3 ~/.openclaw/memory.db "VACUUM; ANALYZE;"
+```
+
+### Database Backup (Recommended)
+```bash
+# Daily at 4 AM - backup memory database
+0 4 * * * cp ~/.openclaw/memory.db ~/.openclaw/memory.db.backup.$(date +\%Y\%m\%d)
+# Keep only last 7 days of backups
+5 4 * * * find ~/.openclaw -name "memory.db.backup.*" -mtime +7 -delete
+```
+
+### Why Automate?
+- **🧹 Keeps memory lean**: Removes expired working memory automatically
+- **⚡ Maintains performance**: Regular consolidation prevents database bloat  
+- **📈 Enables learning**: Self-review catches patterns and improves behavior
+- **🔄 Regenerates context**: Ensures FACTS.md stays current with latest facts
+- **💾 Protects data**: Regular backups prevent memory loss
+
 ## Installation
 
 ### ClawHub (Recommended)

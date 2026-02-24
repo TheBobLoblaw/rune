@@ -152,6 +152,57 @@ brokkr-mem forget --decay-rate 0.03 --grace-days 45
 brokkr-mem cross-session --days 90 --min-sessions 5
 ```
 
+## Automated Maintenance & Performance
+
+Rune performs best with regular maintenance. Here are automation strategies:
+
+### Cron Job Setup
+
+**Daily Maintenance (3 AM)**
+```bash
+# Expire working memory and regenerate context
+0 3 * * * /usr/local/bin/brokkr-mem expire && /usr/local/bin/brokkr-mem inject --output ~/.openclaw/workspace/FACTS.md
+```
+
+**Weekly Optimization (Sunday 2 AM)**  
+```bash
+# Consolidate memory and run self-review
+0 2 * * 0 /usr/local/bin/brokkr-mem consolidate --auto-prioritize && /usr/local/bin/brokkr-mem self-review --days 7
+```
+
+**Monthly Deep Clean (1st of month, 1 AM)**
+```bash
+# Pattern analysis and database optimization
+0 1 1 * * /usr/local/bin/brokkr-mem pattern-analysis --days 30 && sqlite3 ~/.openclaw/memory.db "VACUUM; ANALYZE;"
+```
+
+### Database Backup
+```bash
+# Daily backup at 4 AM
+0 4 * * * cp ~/.openclaw/memory.db ~/.openclaw/memory.db.backup.$(date +\%Y\%m\%d)
+# Keep last 7 days
+5 4 * * * find ~/.openclaw -name "memory.db.backup.*" -mtime +7 -delete
+```
+
+### Performance Benefits
+- **🧹 Memory stays lean**: Auto-removes expired facts
+- **⚡ Faster queries**: Regular consolidation prevents bloat
+- **📈 Self-improvement**: Pattern detection catches recurring issues  
+- **🔄 Current context**: FACTS.md regenerated with latest data
+- **💾 Data protection**: Automated backups prevent loss
+
+### Memory Health Monitoring
+```bash
+# Check database size and fact count
+brokkr-mem stats
+
+# Review recent patterns
+brokkr-mem pattern-analysis --days 7
+
+# Check consolidation opportunities  
+brokkr-mem consolidate --dry-run
+```
+
 ## Troubleshooting
 
 **Memory growing too large?**
