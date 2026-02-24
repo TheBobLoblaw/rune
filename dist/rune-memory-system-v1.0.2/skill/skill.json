@@ -1,0 +1,82 @@
+{
+  "name": "rune",
+  "version": "1.0.2",
+  "description": "Self-improving AI memory system with intelligent context injection and adaptive learning",
+  "keywords": ["self-improvement", "intelligent-memory", "adaptive", "context-injection", "project-management"],
+  "author": "Brokkr AI",
+  "license": "MIT",
+  "openclaw": {
+    "minVersion": "2026.2.0",
+    "compatibility": ["linux", "darwin", "win32"]
+  },
+  "dependencies": {
+    "node": ">=18.0.0",
+    "sqlite3": "^5.1.0",
+    "node-fetch": "^3.0.0"
+  },
+  "systemRequirements": {
+    "disk": "50MB",
+    "ram": "128MB",
+    "optionalServices": ["ollama"]
+  },
+  "environment": {
+    "optional": {
+      "ANTHROPIC_API_KEY": "For cloud-based fact extraction and scoring (optional)",
+      "OPENAI_API_KEY": "For cloud-based fact extraction and scoring (optional)",
+      "OLLAMA_URL": "Ollama server URL (default: http://localhost:11434)"
+    },
+    "warnings": {
+      "privacy": "Rune processes conversational data for learning. Use local Ollama for privacy.",
+      "storage": "Never store credentials or sensitive data in Rune memory."
+    }
+  },
+  "commands": [
+    "brokkr-mem",
+    "rune"
+  ],
+  "hooks": {
+    "install": "./install.sh",
+    "uninstall": "./uninstall.sh",
+    "update": "./update.sh"
+  },
+  "config": {
+    "database": "~/.openclaw/memory.db",
+    "ollamaUrl": "http://localhost:11434",
+    "defaultModel": "llama3.1:8b",
+    "maxFacts": 10000,
+    "defaultThreshold": 0.4
+  },
+  "integrations": {
+    "heartbeat": {
+      "commands": [
+        "brokkr-mem expire",
+        "brokkr-mem inject --output ~/.openclaw/workspace/FACTS.md"
+      ],
+      "frequency": "every 4 hours"
+    },
+    "sessionStart": {
+      "commands": [
+        "./rune-session-handler.sh start"
+      ]
+    },
+    "sessionEnd": {
+      "commands": [
+        "./rune-session-handler.sh end"
+      ]
+    }
+  },
+  "categories": [
+    "memory",
+    "intelligence", 
+    "automation",
+    "productivity"
+  ],
+  "tags": [
+    "ai-memory",
+    "context-injection",
+    "self-improvement",
+    "project-management",
+    "sqlite",
+    "local-first"
+  ]
+}
