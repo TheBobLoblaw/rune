@@ -692,6 +692,166 @@ export function runCli(argv) {
       }
     });
 
+  program.command('who [query]')
+    .description('People directory — look up a person or list all known people')
+    .option('--list', 'List all known people')
+    .option('--alias <alias> <canonical>', 'Create an alias for a person')
+    .option('--json', 'Output as JSON')
+    .action((query, options) => {
+      const db = openDb();
+
+      // Get all person facts
+      const allPersonFacts = db.prepare("SELECT * FROM facts WHERE category = 'person' ORDER BY key").all();
+
+      if (options.list || !query) {
+        // Group by person name (first segment of key)
+        const people = new Map();
+        for (const fact of allPersonFacts) {
+          const person = fact.key.split('.')[0];
+          if (!people.has(person)) people.set(person, []);
+          people.get(person).push(fact);
+        }
+
+        if (people.size === 0) {
+          console.log(colors.yellow('No people in memory'));
+          db.close();
+          return;
+        }
+
+        if (options.json) {
+          const out = {};
+          for (const [name, facts] of people) {
+            out[name] = Object.fromEntries(facts.map(f => [f.key.replace(name + '.', ''), f.value]));
+          }
+          console.log(JSON.stringify(out, null, 2));
+          db.close();
+          return;
+        }
+
+        console.log(colors.bold(`Known People (${people.size})`));
+        console.log('');
+        for (const [name, facts] of people) {
+          const nameFact = facts.find(f => f.key === name + '.name' || f.key === name + '.relationship');
+          const label = nameFact ? nameFact.value : name;
+          const attrCount = facts.length;
+          const lastUpdated = facts.reduce((latest, f) => f.updated > latest ? f.updated : latest, '');
+          console.log(`  ${colors.bold(name.toUpperCase())} — ${label} (${attrCount} facts, updated ${lastUpdated.split('T')[0]})`);
+        }
+        db.close();
+        return;
+      }
+
+      // Fuzzy search for a person
+      const q = query.toLowerCase();
+
+      // Check aliases first
+      const aliasFact = allPersonFacts.find(f =>
+        f.key.endsWith('.alias') && f.value.toLowerCase() === q
+      );
+      const resolvedQuery = aliasFact ? aliasFact.key.split('.')[0] : q;
+
+      // Find matching person — prioritize exact name match, then fuzzy
+      const matched = new Map();
+      // Pass 1: exact name prefix match
+      for (const fact of allPersonFacts) {
+        const person = fact.key.split('.')[0];
+        if (person.toLowerCase() === resolvedQuery) {
+          if (!matched.has(person)) matched.set(person, []);
+        }
+      }
+      // Pass 2: if no exact match, try fuzzy (value/key contains query)
+      if (matched.size === 0) {
+        for (const fact of allPersonFacts) {
+          const person = fact.key.split('.')[0];
+          const keyMatch = person.toLowerCase().includes(resolvedQuery);
+          const valueMatch = fact.value.toLowerCase().includes(resolvedQuery);
+          if (keyMatch || valueMatch) {
+            if (!matched.has(person)) matched.set(person, []);
+          }
+        }
+      }
+
+      // Now collect ALL facts for matched people
+      for (const person of matched.keys()) {
+        const personFacts = allPersonFacts.filter(f => f.key.startsWith(person + '.'));
+        matched.set(person, personFacts);
+      }
+
+      if (matched.size === 0) {
+        console.log(colors.yellow(`No person matching "${query}"`));
+        db.close();
+        return;
+      }
+
+      // Get relations per person
+      function getRelationsForFacts(db, factIds) {
+        if (factIds.length === 0) return [];
+        const placeholders = factIds.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT DISTINCT f.*, r.relation_type
+          FROM relations r
+          JOIN facts f ON (
+            CASE WHEN r.source_fact_id IN (${placeholders})
+              THEN f.id = r.target_fact_id
+              ELSE f.id = r.source_fact_id
+            END
+          )
+          WHERE r.source_fact_id IN (${placeholders}) OR r.target_fact_id IN (${placeholders})
+        `).all(...factIds, ...factIds, ...factIds);
+      }
+
+      if (options.json) {
+        const out = {};
+        for (const [name, facts] of matched) {
+          const personRelations = getRelationsForFacts(db, facts.map(f => f.id));
+          out[name] = {
+            attributes: Object.fromEntries(facts.map(f => [f.key.replace(name + '.', ''), f.value])),
+            relations: personRelations.map(rf => ({ type: rf.relation_type, category: rf.category, key: rf.key, value: rf.value }))
+          };
+        }
+        console.log(JSON.stringify(out, null, 2));
+        db.close();
+        return;
+      }
+
+      // Render profile cards
+      for (const [name, facts] of matched) {
+        const personRelations = getRelationsForFacts(db, facts.map(f => f.id));
+        const width = 50;
+        const border = '═'.repeat(width - 2);
+        const pad = (text) => text + ' '.repeat(Math.max(0, width - text.length - 4));
+
+        console.log(`╔${border}╗`);
+        console.log(`║  ${pad(colors.bold(name.toUpperCase()))}║`);
+        console.log(`╠${border}╣`);
+
+        for (const fact of facts) {
+          const attr = fact.key.replace(name + '.', '');
+          const line = `${attr}: ${fact.value}`;
+          const truncated = line.length > width - 6 ? line.slice(0, width - 9) + '...' : line;
+          console.log(`║  ${pad(truncated)}║`);
+        }
+
+        if (personRelations.length > 0) {
+          console.log(`║${' '.repeat(width - 2)}║`);
+          console.log(`║  ${pad(colors.dim('Related:'))}║`);
+          for (const rf of personRelations.slice(0, 5)) {
+            const line = `• ${rf.category}/${rf.key}: ${rf.value}`;
+            const truncated = line.length > width - 6 ? line.slice(0, width - 9) + '...' : line;
+            console.log(`║  ${pad(truncated)}║`);
+          }
+        }
+
+        const lastUpdated = facts.reduce((latest, f) => f.updated > latest ? f.updated : latest, '');
+        console.log(`║${' '.repeat(width - 2)}║`);
+        console.log(`║  ${pad(colors.dim(`Last updated: ${lastUpdated.split('T')[0]}`))}║`);
+        console.log(`╚${border}╝`);
+        console.log('');
+      }
+
+      db.close();
+    });
+
   program.command('working')
     .description('List all working memory facts and TTL status')
     .action(() => {
