@@ -7,7 +7,7 @@ const VALID_TIERS = new Set(['working', 'long-term']);
 const VALID_SOURCE_TYPES = new Set(['manual', 'inferred', 'user_said', 'tool_output']);
 const VALID_CATEGORIES = new Set(['person', 'project', 'preference', 'decision', 'lesson', 'environment', 'tool', 'task']);
 const MAX_WORDS_PER_CHUNK = 300;
-const OLLAMA_TIMEOUT_MS = 180_000;
+const OLLAMA_TIMEOUT_MS = 60_000;
 const OPENAI_TIMEOUT_MS = 60_000;
 const ANTHROPIC_TIMEOUT_MS = 60_000;
 const DEFAULT_OPENAI_MODEL = 'gpt-4.1-mini';
@@ -177,10 +177,28 @@ function normalizeFacts(parsed) {
   return out;
 }
 
+async function ollamaHealthCheck(ollamaUrl, timeoutMs = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${ollamaUrl}/api/tags`, { signal: controller.signal });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function generateOnce(content, { model, ollamaUrl, verbose = false }) {
-  // Use compact prompt for shorter/denser docs (notes, logs) to stay within token limits
+  // Pre-flight: check Ollama is responsive
+  const healthy = await ollamaHealthCheck(ollamaUrl);
+  if (!healthy) {
+    throw new UserError(`Ollama not responding at ${ollamaUrl}. Is it running? Try: sudo systemctl restart ollama`);
+  }
+
   const wordCount = content.trim().split(/\s+/).length;
-  const prompt = buildPrompt(content);
+  const prompt = wordCount < 1000 ? buildCompactPrompt(content) : buildPrompt(content);
 
   if (verbose) {
     console.error('--- Extraction Prompt ---');
@@ -210,7 +228,7 @@ async function generateOnce(content, { model, ollamaUrl, verbose = false }) {
     if (err && err.name === 'AbortError') {
       throw new UserError(`Ollama request timed out after ${Math.floor(OLLAMA_TIMEOUT_MS / 1000)}s`);
     }
-    throw new UserError(`Failed to reach Ollama at ${ollamaUrl}. Is Ollama running?`);
+    throw new UserError(`Failed to reach Ollama at ${ollamaUrl}: ${err.message || String(err)}`);
   } finally {
     clearTimeout(timer);
   }
