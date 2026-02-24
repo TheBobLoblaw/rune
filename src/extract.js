@@ -7,6 +7,12 @@ const VALID_SOURCE_TYPES = new Set(['manual', 'inferred', 'user_said', 'tool_out
 const VALID_CATEGORIES = new Set(['person', 'project', 'preference', 'decision', 'lesson', 'environment', 'tool', 'task']);
 const MAX_WORDS_PER_CHUNK = 10000;
 const OLLAMA_TIMEOUT_MS = 180_000;
+const OPENAI_TIMEOUT_MS = 60_000;
+const ANTHROPIC_TIMEOUT_MS = 60_000;
+const DEFAULT_OPENAI_MODEL = 'gpt-4.1-mini';
+const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
 function buildPrompt(content) {
   return [
@@ -225,6 +231,190 @@ async function generateOnce(content, { model, ollamaUrl, verbose = false }) {
   };
 }
 
+async function generateOnceOpenAI(content, { model, verbose = false }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new UserError('OPENAI_API_KEY not set. Use --engine ollama or set the env var.');
+  }
+
+  const systemPrompt = buildPrompt('').replace(/\nTranscript:\n$/, '').trim();
+  const userMessage = content;
+
+  if (verbose) {
+    console.error('--- OpenAI Extraction ---');
+    console.error(`model: ${model}`);
+    console.error(`content length: ${content.length} chars`);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage }
+        ],
+        temperature: 0.2,
+        max_tokens: 2048,
+        response_format: { type: 'json_object' }
+      }),
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      throw new UserError(`OpenAI request timed out after ${Math.floor(OPENAI_TIMEOUT_MS / 1000)}s`);
+    }
+    throw new UserError(`Failed to reach OpenAI API: ${err.message || String(err)}`);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new UserError(`OpenAI API error (${response.status}): ${errText}`);
+  }
+
+  const payload = await response.json();
+  const text = payload.choices?.[0]?.message?.content;
+  if (!text) {
+    throw new UserError('OpenAI returned an empty response');
+  }
+
+  if (verbose) {
+    console.error('--- OpenAI Response ---');
+    console.error(text);
+    const usage = payload.usage;
+    if (usage) {
+      console.error(`tokens: prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`);
+    }
+  }
+
+  const parsed = JSON.parse(text);
+  let factsRaw = [];
+  let summary = normalizeSummary({});
+
+  if (Array.isArray(parsed)) {
+    factsRaw = parsed;
+  } else if (parsed && typeof parsed === 'object') {
+    if (Array.isArray(parsed.facts)) {
+      factsRaw = parsed.facts;
+    }
+    summary = normalizeSummary(parsed.session_summary);
+  } else {
+    throw new UserError('OpenAI response must be a JSON object or array');
+  }
+
+  return {
+    facts: normalizeFacts(factsRaw),
+    session_summary: summary
+  };
+}
+
+async function generateOnceAnthropic(content, { model, verbose = false }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new UserError('ANTHROPIC_API_KEY not set. Use --engine ollama or set the env var.');
+  }
+
+  const systemPrompt = buildPrompt('').replace(/\nTranscript:\n$/, '').trim();
+
+  if (verbose) {
+    console.error('--- Anthropic Extraction ---');
+    console.error(`model: ${model}`);
+    console.error(`content length: ${content.length} chars`);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ANTHROPIC_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2048,
+        temperature: 0.2,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: content }
+        ]
+      }),
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      throw new UserError(`Anthropic request timed out after ${Math.floor(ANTHROPIC_TIMEOUT_MS / 1000)}s`);
+    }
+    throw new UserError(`Failed to reach Anthropic API: ${err.message || String(err)}`);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new UserError(`Anthropic API error (${response.status}): ${errText}`);
+  }
+
+  const payload = await response.json();
+  const textBlock = payload.content?.find(b => b.type === 'text');
+  const text = textBlock?.text;
+  if (!text) {
+    throw new UserError('Anthropic returned an empty response');
+  }
+
+  if (verbose) {
+    console.error('--- Anthropic Response ---');
+    console.error(text);
+    console.error(`tokens: input=${payload.usage?.input_tokens} output=${payload.usage?.output_tokens}`);
+  }
+
+  const parsed = findJsonCandidate(text);
+  let factsRaw = [];
+  let summary = normalizeSummary({});
+
+  if (Array.isArray(parsed)) {
+    factsRaw = parsed;
+  } else if (parsed && typeof parsed === 'object') {
+    if (Array.isArray(parsed.facts)) {
+      factsRaw = parsed.facts;
+    }
+    summary = normalizeSummary(parsed.session_summary);
+  } else {
+    throw new UserError('Anthropic response must be a JSON object or array');
+  }
+
+  return {
+    facts: normalizeFacts(factsRaw),
+    session_summary: summary
+  };
+}
+
+function resolveEngine(engine) {
+  if (engine === 'openai' || engine === 'codex') return 'openai';
+  if (engine === 'anthropic' || engine === 'claude') return 'anthropic';
+  if (engine === 'ollama') return 'ollama';
+  if (engine === 'auto' || !engine) {
+    // Prefer Anthropic (Max sub, no per-token cost), fall back to OpenAI, then Ollama
+    if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
+    if (process.env.OPENAI_API_KEY) return 'openai';
+    return 'ollama';
+  }
+  throw new UserError(`Unknown engine "${engine}". Use: anthropic, openai, ollama, or auto`);
+}
+
 function chunkContent(content) {
   const words = content.trim().split(/\s+/).filter(Boolean);
   if (words.length <= MAX_WORDS_PER_CHUNK) {
@@ -278,17 +468,33 @@ export async function extractFactsFromFile(filePath, options = {}) {
   }
   const content = fs.readFileSync(filePath, 'utf8');
   const chunks = chunkContent(content);
-  const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
-  const model = options.model || 'qwen3:8b';
+  const engine = resolveEngine(options.engine);
 
   const allFacts = [];
   const summaries = [];
   for (const chunk of chunks) {
-    const extracted = await generateOnce(chunk, {
-      model,
-      ollamaUrl,
-      verbose: Boolean(options.verbose)
-    });
+    let extracted;
+    if (engine === 'anthropic') {
+      const model = options.model || DEFAULT_ANTHROPIC_MODEL;
+      extracted = await generateOnceAnthropic(chunk, {
+        model,
+        verbose: Boolean(options.verbose)
+      });
+    } else if (engine === 'openai') {
+      const model = options.model || DEFAULT_OPENAI_MODEL;
+      extracted = await generateOnceOpenAI(chunk, {
+        model,
+        verbose: Boolean(options.verbose)
+      });
+    } else {
+      const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+      const model = options.model || 'qwen3:8b';
+      extracted = await generateOnce(chunk, {
+        model,
+        ollamaUrl,
+        verbose: Boolean(options.verbose)
+      });
+    }
     allFacts.push(...extracted.facts);
     summaries.push(extracted.session_summary);
   }
@@ -296,6 +502,7 @@ export async function extractFactsFromFile(filePath, options = {}) {
   return {
     facts: dedupeExtractedFacts(allFacts),
     session_summary: mergeSummaries(summaries),
-    chunks: chunks.length
+    chunks: chunks.length,
+    engine
   };
 }

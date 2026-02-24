@@ -365,6 +365,7 @@ function storeSessionSummary(db, summary) {
 
 async function runExtractOne(file, options) {
   const extraction = await extractFactsFromFile(file, {
+    engine: options.engine,
     model: options.model,
     verbose: Boolean(options.verbose)
   });
@@ -716,9 +717,10 @@ export function runCli(argv) {
     });
 
   program.command('extract <file>')
-    .description('Extract facts and session summary from markdown using Ollama')
+    .description('Extract facts and session summary from a markdown file')
     .option('--dry-run', 'Print extracted facts without writing')
-    .option('--model <model>', 'Ollama model name', 'qwen3:8b')
+    .option('--engine <engine>', 'Extraction engine: anthropic, openai, ollama, or auto (default: auto)', 'auto')
+    .option('--model <model>', 'Model name (default depends on engine)')
     .option('--verbose', 'Show extraction prompt and raw model response')
     .action(async (file, options) => {
       requireFile(file);
@@ -733,7 +735,8 @@ export function runCli(argv) {
     .option('--pattern <glob>', 'File pattern', '*.md')
     .option('--since <date>', 'Only process files modified after date (ISO)')
     .option('--dry-run', 'Print extracted facts without writing')
-    .option('--model <model>', 'Ollama model name', 'qwen3:8b')
+    .option('--engine <engine>', 'Extraction engine: anthropic, openai, ollama, or auto (default: auto)', 'auto')
+    .option('--model <model>', 'Model name (default depends on engine)')
     .option('--verbose', 'Show extraction prompt and raw model response')
     .action(async (directory, options) => {
       requireDirectory(directory);
