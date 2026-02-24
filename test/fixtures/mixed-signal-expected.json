@@ -1,0 +1,13 @@
+{
+  "facts": [
+    { "category": "environment", "key": "production.domain", "value": "api.acme.io" },
+    { "category": "environment", "key": "staging.domain", "value": "staging-api.acme.io" },
+    { "category": "tool", "key": "auth.provider", "value": "Auth0" },
+    { "category": "environment", "key": "auth.tenant", "value": "acme-prod" },
+    { "category": "tool", "key": "monitoring.apm", "value": "Datadog" },
+    { "category": "tool", "key": "monitoring.alerts", "value": "PagerDuty" },
+    { "category": "project", "key": "oncall.rotation", "value": "weekly" },
+    { "category": "environment", "key": "slack.workspace", "value": "acme-eng.slack.com" }
+  ],
+  "notes": "Should NOT extract: cat knocking monitor, getting coffee, playing valorant — these are noise"
+}

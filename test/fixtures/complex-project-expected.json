@@ -1,0 +1,17 @@
+{
+  "facts": [
+    { "category": "project", "key": "heimdall.type", "value": "monitoring dashboard" },
+    { "category": "project", "key": "heimdall.backend", "value": "Go with Chi router" },
+    { "category": "project", "key": "heimdall.frontend", "value": "Svelte with TypeScript" },
+    { "category": "project", "key": "heimdall.database", "value": "Postgres 16" },
+    { "category": "environment", "key": "heimdall.deployment", "value": "Kubernetes on AWS EKS" },
+    { "category": "tool", "key": "heimdall.ci", "value": "GitHub Actions" },
+    { "category": "tool", "key": "heimdall.cd", "value": "ArgoCD" },
+    { "category": "environment", "key": "heimdall.api.port", "value": "8080" },
+    { "category": "environment", "key": "heimdall.healthcheck", "value": "/healthz" },
+    { "category": "project", "key": "heimdall.sla", "value": "99.9% uptime" },
+    { "category": "project", "key": "heimdall.p95.goal", "value": "under 100ms" },
+    { "category": "lesson", "key": "migrations.timing", "value": "never run migrations during peak hours" },
+    { "category": "project", "key": "heimdall.budget", "value": "$2000/month" }
+  ]
+}

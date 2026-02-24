@@ -1,0 +1,12 @@
+{
+  "facts": [
+    { "category": "person", "key": "jake.role", "value": "DevOps lead" },
+    { "category": "person", "key": "jake.location", "value": "Austin" },
+    { "category": "person", "key": "jake.github", "value": "@jakeops" },
+    { "category": "person", "key": "maria.role", "value": "frontend" },
+    { "category": "person", "key": "maria.framework", "value": "React" },
+    { "category": "person", "key": "maria.email", "value": "maria@company.io" },
+    { "category": "person", "key": "tyler.role", "value": "PM" },
+    { "category": "tool", "key": "tyler.tracker", "value": "Linear" }
+  ]
+}

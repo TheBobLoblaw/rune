@@ -1,0 +1,8 @@
+{
+  "facts": [
+    { "category": "project", "key": "database", "value": "CockroachDB" },
+    { "category": "project", "key": "deploy.cadence", "value": "Tuesday mornings" },
+    { "category": "environment", "key": "api.port", "value": "8080" }
+  ],
+  "notes": "Must NOT contain MySQL, PostgreSQL, Friday, or port 3000 — all were superseded"
+}

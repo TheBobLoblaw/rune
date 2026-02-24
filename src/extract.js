@@ -6,49 +6,57 @@ const VALID_TIERS = new Set(['working', 'long-term']);
 const VALID_SOURCE_TYPES = new Set(['manual', 'inferred', 'user_said', 'tool_output']);
 const VALID_CATEGORIES = new Set(['person', 'project', 'preference', 'decision', 'lesson', 'environment', 'tool', 'task']);
 const MAX_WORDS_PER_CHUNK = 10000;
-const OLLAMA_TIMEOUT_MS = 60_000;
+const OLLAMA_TIMEOUT_MS = 180_000;
 
 function buildPrompt(content) {
   return [
-    'You are a fact extraction system. Read the following conversation transcript and extract structured facts.',
+    'You are a fact extraction system. Read the conversation and extract structured facts as JSON.',
     '',
-    'Return JSON in this shape:',
+    'Output format (JSON only, no explanation):',
     '{',
     '  "facts": [',
     '    {',
     '      "category": "person|project|preference|decision|lesson|environment|tool|task",',
-    '      "key": "dot.notation.key",',
+    '      "key": "entity.attribute (e.g. alex.employer, cad-wiki.editor, deploy.cadence)",',
     '      "value": "concise fact string",',
     '      "scope": "global|project",',
     '      "tier": "long-term|working",',
     '      "source_type": "user_said|inferred|tool_output",',
-    '      "confidence": 0.0,',
+    '      "confidence": 0.5-1.0,',
     '      "ttl": null',
     '    }',
     '  ],',
     '  "session_summary": {',
-    '    "decisions": ["..."],',
-    '    "open_questions": ["..."],',
-    '    "action_items": ["..."],',
-    '    "topics": ["..."]',
+    '    "decisions": [],',
+    '    "open_questions": [],',
+    '    "action_items": [],',
+    '    "topics": []',
     '  }',
     '}',
     '',
-    'Rules:',
-    '- Return valid JSON only.',
-    '- Extract only genuinely useful facts.',
-    '- Prefer source_type=user_said when explicitly stated by user.',
-    '- Use tier=working only for likely-stale short-term task state (ttl like "24h" or "7d").',
-    '- Use tier=long-term for durable memory (ttl must be null).',
-    '- Be conservative: fewer high-quality facts is better.',
+    'KEY RULES:',
+    '- Keys MUST be entity-specific: "alex.name" NOT "person.name", "cory.son" NOT "person.son"',
+    '- ONE FACT PER ATTRIBUTE. Split compound facts: "backend is Go, frontend is Svelte" = 2 separate facts',
+    '- Extract ALL facts: names, emails, employers, roles, tools, frameworks, decisions, relationships, URLs, ports',
+    '- When user contradicts themselves, use the LATEST value only. Do NOT include superseded values.',
+    '- tier=long-term for durable facts (preferences, names, relationships, tools). ttl must be null.',
+    '- tier=working ONLY for active tasks/builds that will expire. Set ttl like "24h" or "7d".',
+    '- confidence: 0.95=user explicitly stated verbatim, 0.8=clearly implied, 0.6=inferred/ambiguous',
+    '- source_type=user_said when user explicitly states it, inferred when you deduce it',
+    '- Ignore noise: greetings, jokes, off-topic chat, brb messages are NOT facts',
+    '- Return ONLY valid JSON. No markdown, no explanation, no preamble.',
     '',
-    'Conversation transcript:',
+    'Transcript:',
     content
   ].join('\n');
 }
 
 function normalizeOllamaResponse(text) {
-  const trimmed = text.trim();
+  // Strip <think>...</think> reasoning blocks from models like qwen3
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  // Also strip unclosed <think> blocks (model started thinking but didn't close)
+  cleaned = cleaned.replace(/<think>[\s\S]*/gi, '');
+  const trimmed = cleaned.trim();
   const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   return fenceMatch ? fenceMatch[1].trim() : trimmed;
 }
@@ -164,8 +172,10 @@ async function generateOnce(content, { model, ollamaUrl, verbose = false }) {
         model,
         prompt,
         stream: false,
+        think: false,
         options: {
-          temperature: 0.3
+          temperature: 0.3,
+          num_predict: 2048
         }
       }),
       signal: controller.signal
