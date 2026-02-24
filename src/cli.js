@@ -616,6 +616,168 @@ export function runCli(argv) {
       printSimpleList(rows);
     });
 
+  program.command('score <message>')
+    .description('Score all facts for relevance to a message/query (Phase 4: Adaptive Context)')
+    .option('--engine <engine>', 'Scoring engine: ollama (default), anthropic, openai', 'ollama')
+    .option('--model <model>', 'Model for scoring')
+    .option('--limit <n>', 'Max facts to return', '50')
+    .option('--threshold <score>', 'Min relevance score (0-1)', '0.3')
+    .option('--json', 'Output as JSON')
+    .action(async (message, options) => {
+      const db = openDb();
+      const limit = parseInt(options.limit, 10) || 50;
+      const threshold = parseFloat(options.threshold) || 0.3;
+      
+      // Get all facts
+      const allFacts = db.prepare('SELECT * FROM facts ORDER BY updated DESC').all();
+      if (allFacts.length === 0) {
+        console.log(colors.yellow('No facts to score'));
+        db.close();
+        return;
+      }
+
+      try {
+        const { scoreFactsForRelevance } = await import('./relevance.js');
+        const scoredFacts = await scoreFactsForRelevance(message, allFacts, {
+          engine: options.engine,
+          model: options.model,
+          limit,
+          threshold
+        });
+
+        if (options.json) {
+          console.log(JSON.stringify(scoredFacts, null, 2));
+          db.close();
+          return;
+        }
+
+        console.log(colors.bold(`🎯 Relevance: "${message}"`));
+        console.log('');
+        
+        for (const item of scoredFacts) {
+          const score = item.relevance_score.toFixed(3);
+          const color = item.relevance_score > 0.7 ? colors.green : item.relevance_score > 0.5 ? colors.yellow : colors.dim;
+          console.log(`${color(score)} ${item.category}/${item.key} = ${item.value}`);
+        }
+        
+        console.log('');
+        console.log(colors.dim(`${scoredFacts.length} fact(s) above ${threshold} threshold`));
+        
+      } catch (err) {
+        console.log(colors.red(`Scoring failed: ${err.message}`));
+      }
+      
+      db.close();
+    });
+
+  program.command('budget <message>')
+    .description('Generate context within strict token budget (Phase 4: T-028)')
+    .option('--engine <engine>', 'Scoring engine', 'ollama')
+    .option('--model <model>', 'Model for scoring')
+    .option('--tokens <n>', 'Token budget (approximate)', '500')
+    .option('--threshold <score>', 'Min relevance score (0-1)', '0.5')
+    .action(async (message, options) => {
+      try {
+        const tokenBudget = parseInt(options.tokens, 10) || 500;
+        const threshold = parseFloat(options.threshold) || 0.5;
+        
+        const { openDb } = await import('./db.js');
+        const { scoreFactsForRelevance } = await import('./relevance.js');
+        
+        const db = openDb();
+        const allFacts = db.prepare('SELECT * FROM facts ORDER BY updated DESC').all();
+        db.close();
+        
+        if (allFacts.length === 0) {
+          console.log(colors.yellow('No facts to budget'));
+          return;
+        }
+
+        // Score all facts
+        const scoredFacts = await scoreFactsForRelevance(message, allFacts, {
+          engine: options.engine,
+          model: options.model,
+          limit: 100,  // Get many candidates
+          threshold: 0.1  // Low threshold for candidates
+        });
+
+        // Budget selection: estimate tokens per fact (~15-25 tokens avg)
+        const AVG_TOKENS_PER_FACT = 20;
+        const headerTokens = 50;  // "# Dynamic Context" etc
+        const availableTokens = tokenBudget - headerTokens;
+        const maxFacts = Math.floor(availableTokens / AVG_TOKENS_PER_FACT);
+        
+        // Select top facts within budget, respect threshold
+        const selectedFacts = scoredFacts
+          .filter(f => f.relevance_score >= threshold)
+          .slice(0, Math.max(1, maxFacts));  // At least 1 fact if any pass threshold
+        
+        if (selectedFacts.length === 0) {
+          console.log(colors.yellow(`No facts above threshold ${threshold}`));
+          return;
+        }
+
+        // Generate context
+        let context = '# Dynamic Context\n\n';
+        const grouped = {};
+        for (const fact of selectedFacts) {
+          if (!grouped[fact.category]) grouped[fact.category] = [];
+          grouped[fact.category].push(fact);
+        }
+
+        for (const [category, facts] of Object.entries(grouped)) {
+          context += `## ${category}\n`;
+          for (const fact of facts) {
+            context += `- ${fact.key}: ${fact.value}\n`;
+          }
+          context += '\n';
+        }
+
+        const actualTokens = Math.round(context.length / 3.5);  // Rough token estimate
+        context += `*${selectedFacts.length} fact(s), ~${actualTokens}/${tokenBudget} tokens*\n`;
+        
+        console.log(context);
+        
+        if (actualTokens > tokenBudget) {
+          console.log(colors.yellow(`Warning: Exceeded budget by ${actualTokens - tokenBudget} tokens`));
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Budget generation failed: ${err.message}`));
+      }
+    });
+
+  program.command('context <message>')
+    .description('Generate dynamic context injection for a message (Phase 4: T-025)')
+    .option('--engine <engine>', 'Scoring engine: ollama (default), anthropic, openai', 'ollama')
+    .option('--model <model>', 'Model for scoring')
+    .option('--budget <n>', 'Max facts to include (context budget)', '15')
+    .option('--threshold <score>', 'Min relevance score (0-1)', '0.4')
+    .option('--output <file>', 'Write to file instead of stdout')
+    .action(async (message, options) => {
+      try {
+        const { generateDynamicContext } = await import('./relevance.js');
+        
+        const contextMd = await generateDynamicContext(message, {
+          engine: options.engine,
+          model: options.model,
+          contextBudget: parseInt(options.budget, 10) || 15,
+          threshold: parseFloat(options.threshold) || 0.4
+        });
+
+        if (options.output) {
+          const fs = await import('fs');
+          fs.writeFileSync(options.output, contextMd);
+          console.log(colors.green(`Context written to ${options.output}`));
+        } else {
+          console.log(contextMd);
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Context generation failed: ${err.message}`));
+      }
+    });
+
   program.command('recall <topic>')
     .description('Smart recall — pull all relevant context for a topic (facts, decisions, lessons, people, history)')
     .option('--json', 'Output as JSON for programmatic use')

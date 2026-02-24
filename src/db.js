@@ -45,7 +45,9 @@ const FACT_COLUMN_MIGRATIONS = [
   { name: 'tier', sql: "ALTER TABLE facts ADD COLUMN tier TEXT DEFAULT 'long-term'" },
   { name: 'expires_at', sql: 'ALTER TABLE facts ADD COLUMN expires_at TEXT' },
   { name: 'last_verified', sql: 'ALTER TABLE facts ADD COLUMN last_verified TEXT' },
-  { name: 'source_type', sql: "ALTER TABLE facts ADD COLUMN source_type TEXT DEFAULT 'manual'" }
+  { name: 'source_type', sql: "ALTER TABLE facts ADD COLUMN source_type TEXT DEFAULT 'manual'" },
+  { name: 'access_count', sql: 'ALTER TABLE facts ADD COLUMN access_count INTEGER DEFAULT 0' },
+  { name: 'last_accessed', sql: 'ALTER TABLE facts ADD COLUMN last_accessed TEXT DEFAULT NULL' }
 ];
 
 const FTS_SQL = `
@@ -121,6 +123,7 @@ const FACT_POST_MIGRATION_INDEXES_SQL = `
 CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(scope);
 CREATE INDEX IF NOT EXISTS idx_facts_tier ON facts(tier);
 CREATE INDEX IF NOT EXISTS idx_facts_expires_at ON facts(expires_at);
+CREATE INDEX IF NOT EXISTS idx_facts_access ON facts(access_count DESC, last_accessed DESC);
 `;
 
 export const DB_PATH = path.join(os.homedir(), '.openclaw', 'memory.db');
@@ -185,4 +188,51 @@ export function openDb(dbPath = DB_PATH) {
 
 export function nowIso() {
   return new Date().toISOString();
+}
+
+/**
+ * Track access to a fact (T-027: Access tracking)
+ */
+export function trackFactAccess(db, factId, sessionId = null) {
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE facts 
+    SET access_count = access_count + 1, 
+        last_accessed = ?
+    WHERE id = ?
+  `).run(now, factId);
+  
+  // Optionally log to performance_log
+  if (sessionId) {
+    db.prepare(`
+      INSERT INTO performance_log (event_type, category, detail, session_id, created)
+      VALUES ('fact-access', 'memory', ?, ?, ?)
+    `).run(`Accessed fact ${factId}`, sessionId, now);
+  }
+}
+
+/**
+ * Calculate relevance boost based on access patterns and age (T-026)
+ */
+export function calculateAccessBoost(fact) {
+  const now = Date.now();
+  const accessCount = fact.access_count || 0;
+  const lastAccessed = fact.last_accessed ? new Date(fact.last_accessed).getTime() : null;
+  const updated = new Date(fact.updated).getTime();
+  
+  // Access frequency boost (0-0.2)
+  const accessBoost = Math.min(0.2, (accessCount * 0.02));
+  
+  // Recency boost for recently accessed facts (0-0.15)
+  let recencyBoost = 0;
+  if (lastAccessed) {
+    const daysSinceAccess = (now - lastAccessed) / (1000 * 60 * 60 * 24);
+    recencyBoost = Math.max(0, 0.15 * Math.exp(-daysSinceAccess / 7)); // Decay over 7 days
+  }
+  
+  // Age penalty for old facts (0 to -0.1)
+  const daysSinceUpdate = (now - updated) / (1000 * 60 * 60 * 24);
+  const agePenalty = Math.max(-0.1, -daysSinceUpdate / 100); // Small penalty for very old facts
+  
+  return accessBoost + recencyBoost + agePenalty;
 }

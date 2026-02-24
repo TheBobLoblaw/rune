@@ -219,7 +219,8 @@ async function generateOnce(content, { model, ollamaUrl, verbose = false }) {
         think: false,
         options: {
           temperature: 0.3,
-          num_predict: 4096
+          num_predict: 4096,
+          num_ctx: 8192
         }
       }),
       signal: controller.signal
