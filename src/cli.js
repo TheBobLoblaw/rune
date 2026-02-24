@@ -616,6 +616,138 @@ export function runCli(argv) {
       printSimpleList(rows);
     });
 
+  program.command('recall <topic>')
+    .description('Smart recall — pull all relevant context for a topic (facts, decisions, lessons, people, history)')
+    .option('--json', 'Output as JSON for programmatic use')
+    .option('--limit <n>', 'Max facts per section', '10')
+    .action((topic, options) => {
+      const db = openDb();
+      const q = topic.toLowerCase();
+      const limit = parseInt(options.limit, 10) || 10;
+
+      // FTS search
+      const ftsQuery = toFtsQuery(topic);
+      let ftsResults = [];
+      try {
+        ftsResults = db.prepare(`
+          SELECT f.*, bm25(facts_fts) as rank
+          FROM facts_fts
+          JOIN facts f ON f.id = facts_fts.rowid
+          WHERE facts_fts MATCH ?
+          ORDER BY bm25(facts_fts)
+          LIMIT ?
+        `).all(ftsQuery, limit * 3);
+      } catch { /* FTS query might fail on special chars */ }
+
+      // Fuzzy fallback
+      const fuzzyResults = db.prepare(`
+        SELECT * FROM facts
+        WHERE LOWER(key) LIKE ? OR LOWER(value) LIKE ?
+        ORDER BY updated DESC
+        LIMIT ?
+      `).all(`%${q}%`, `%${q}%`, limit * 3);
+
+      // Merge and dedup
+      const seen = new Set();
+      const allFacts = [];
+      for (const f of [...ftsResults, ...fuzzyResults]) {
+        if (!seen.has(f.id)) {
+          seen.add(f.id);
+          allFacts.push(f);
+        }
+      }
+
+      // Categorize
+      const facts = allFacts.filter(f => !['decision', 'lesson', 'session'].includes(f.category)).slice(0, limit);
+      const decisions = allFacts.filter(f => f.category === 'decision').slice(0, 5);
+      const lessons = allFacts.filter(f => f.category === 'lesson').slice(0, 5);
+      const people = allFacts.filter(f => f.category === 'person').slice(0, 5);
+
+      // Get recent performance events
+      const perfEvents = db.prepare(`
+        SELECT * FROM performance_log
+        WHERE LOWER(detail) LIKE ? OR LOWER(category) LIKE ?
+        ORDER BY created DESC LIMIT 5
+      `).all(`%${q}%`, `%${q}%`);
+
+      // Get changelog
+      const changes = db.prepare(`
+        SELECT * FROM changelog
+        WHERE LOWER(key) LIKE ? OR LOWER(old_value) LIKE ? OR LOWER(new_value) LIKE ?
+        ORDER BY created DESC LIMIT 5
+      `).all(`%${q}%`, `%${q}%`, `%${q}%`);
+
+      if (options.json) {
+        console.log(JSON.stringify({ topic, facts, decisions, lessons, people, events: perfEvents, changes }, null, 2));
+        db.close();
+        return;
+      }
+
+      const total = facts.length + decisions.length + lessons.length + people.length;
+      if (total === 0 && perfEvents.length === 0 && changes.length === 0) {
+        console.log(colors.yellow(`Nothing found for "${topic}"`));
+        db.close();
+        return;
+      }
+
+      console.log(colors.bold(`🧠 Recall: "${topic}"`));
+      console.log('');
+
+      if (facts.length > 0) {
+        console.log(colors.bold('Facts:'));
+        for (const f of facts) {
+          console.log(`  ${f.category}/${f.key} = ${f.value}`);
+        }
+        console.log('');
+      }
+
+      if (decisions.length > 0) {
+        console.log(colors.bold('Decisions:'));
+        for (const d of decisions) {
+          console.log(`  ⚖️  ${d.key}: ${d.value}`);
+        }
+        console.log('');
+      }
+
+      if (lessons.length > 0) {
+        console.log(colors.bold('Lessons:'));
+        for (const l of lessons) {
+          console.log(`  💡 ${l.key}: ${l.value}`);
+        }
+        console.log('');
+      }
+
+      if (people.length > 0) {
+        console.log(colors.bold('People:'));
+        for (const p of people) {
+          console.log(`  👤 ${p.key}: ${p.value}`);
+        }
+        console.log('');
+      }
+
+      if (perfEvents.length > 0) {
+        console.log(colors.bold('Past Events:'));
+        for (const e of perfEvents) {
+          const icon = e.event_type === 'mistake' ? '❌' : e.event_type === 'success' ? '✅' : '📝';
+          console.log(`  ${icon} ${e.event_type}: ${e.detail}`);
+        }
+        console.log('');
+      }
+
+      if (changes.length > 0) {
+        console.log(colors.bold('Changes:'));
+        for (const c of changes) {
+          if (c.change_type === 'updated') {
+            console.log(`  ~ ${c.key}: ${c.old_value} → ${c.new_value}`);
+          }
+        }
+        console.log('');
+      }
+
+      console.log(colors.dim(`${total} fact(s) + ${perfEvents.length} event(s) + ${changes.length} change(s)`));
+      db.close();
+    });
+
   program.command('list')
     .description('List facts with optional filters')
     .option('--category <cat>', 'Filter category')
