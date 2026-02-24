@@ -86,6 +86,23 @@ CREATE INDEX IF NOT EXISTS idx_extraction_log_path ON extraction_log(file_path);
 CREATE INDEX IF NOT EXISTS idx_extraction_log_created ON extraction_log(created);
 `;
 
+const CHANGELOG_SQL = `
+CREATE TABLE IF NOT EXISTS changelog (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  fact_id INTEGER NOT NULL,
+  category TEXT NOT NULL,
+  key TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  source TEXT,
+  created TEXT NOT NULL,
+  FOREIGN KEY (fact_id) REFERENCES facts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_changelog_fact ON changelog(fact_id);
+CREATE INDEX IF NOT EXISTS idx_changelog_created ON changelog(created);
+`;
+
 const FACT_POST_MIGRATION_INDEXES_SQL = `
 CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(scope);
 CREATE INDEX IF NOT EXISTS idx_facts_tier ON facts(tier);
@@ -146,6 +163,7 @@ export function openDb(dbPath = DB_PATH) {
   }
 
   db.exec(EXTRACTION_LOG_SQL);
+  db.exec(CHANGELOG_SQL);
 
   return db;
 }

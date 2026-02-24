@@ -165,6 +165,16 @@ function upsertFact(db, {
   source_type: sourceType = 'manual'
 }) {
   const ts = nowIso();
+
+  // Check for existing fact — log change if value differs
+  const existing = db.prepare('SELECT id, value FROM facts WHERE category = ? AND key = ?').get(category, key);
+  if (existing && existing.value !== value) {
+    db.prepare(`
+      INSERT INTO changelog (fact_id, category, key, old_value, new_value, change_type, source, created)
+      VALUES (?, ?, ?, ?, ?, 'updated', ?, ?)
+    `).run(existing.id, category, key, existing.value, value, source, ts);
+  }
+
   const stmt = db.prepare(`
     INSERT INTO facts (category, key, value, source, confidence, created, updated, scope, tier, expires_at, last_verified, source_type)
     VALUES (@category, @key, @value, @source, @confidence, @created, @updated, @scope, @tier, @expires_at, @last_verified, @source_type)
@@ -180,6 +190,8 @@ function upsertFact(db, {
       updated = excluded.updated
   `);
 
+  const changeType = existing ? 'updated' : 'inserted';
+
   stmt.run({
     category,
     key,
@@ -194,6 +206,19 @@ function upsertFact(db, {
     last_verified: lastVerified,
     source_type: sourceType
   });
+
+  // Log insertion to changelog too
+  if (!existing) {
+    const newFact = db.prepare('SELECT id FROM facts WHERE category = ? AND key = ?').get(category, key);
+    if (newFact) {
+      db.prepare(`
+        INSERT INTO changelog (fact_id, category, key, old_value, new_value, change_type, source, created)
+        VALUES (?, ?, ?, NULL, ?, 'created', ?, ?)
+      `).run(newFact.id, category, key, value, source, ts);
+    }
+  }
+
+  return changeType;
 }
 
 function requireFile(filePath) {
@@ -1092,6 +1117,35 @@ export function runCli(argv) {
         return;
       }
       process.stdout.write(factsToMarkdown(rows));
+    });
+
+  program.command('history [key]')
+    .description('Show change history for a fact or all recent changes')
+    .option('--limit <n>', 'Max entries to show', '20')
+    .action((key, options) => {
+      const db = openDb();
+      const limit = parseInt(options.limit, 10) || 20;
+      let rows;
+      if (key) {
+        rows = db.prepare('SELECT * FROM changelog WHERE key LIKE ? ORDER BY created DESC LIMIT ?').all(`%${key}%`, limit);
+      } else {
+        rows = db.prepare('SELECT * FROM changelog ORDER BY created DESC LIMIT ?').all(limit);
+      }
+      if (rows.length === 0) {
+        console.log(colors.yellow('No change history found'));
+        db.close();
+        return;
+      }
+      for (const row of rows) {
+        const date = row.created.split('T')[0];
+        if (row.change_type === 'created') {
+          console.log(`${colors.green('+')} ${colors.dim(date)} ${row.category}/${row.key} = ${row.new_value}`);
+        } else {
+          console.log(`${colors.yellow('~')} ${colors.dim(date)} ${row.category}/${row.key}: ${colors.red(row.old_value)} → ${colors.green(row.new_value)}`);
+        }
+      }
+      console.log(colors.dim(`\n${rows.length} change(s)`));
+      db.close();
     });
 
   program.command('stats')
