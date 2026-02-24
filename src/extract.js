@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { UserError } from './errors.js';
 
 const VALID_SCOPES = new Set(['global', 'project', 'conversation']);
@@ -460,6 +461,37 @@ function dedupeExtractedFacts(facts) {
     }
   }
   return [...map.values()];
+}
+
+function fileHash(content) {
+  return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
+}
+
+export function wasAlreadyExtracted(db, filePath, content) {
+  const hash = fileHash(content);
+  const row = db.prepare(
+    "SELECT id FROM extraction_log WHERE file_path = ? AND file_hash = ? AND status = 'ok'"
+  ).get(filePath, hash);
+  return Boolean(row);
+}
+
+export function logExtraction(db, { filePath, content, engine, model, facts, inserted, updated, skipped, durationMs, status, error }) {
+  const hash = fileHash(content);
+  db.prepare(`
+    INSERT INTO extraction_log (file_path, file_hash, engine, model, facts_extracted, facts_inserted, facts_updated, facts_skipped, duration_ms, status, error, created)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(file_path, file_hash) DO UPDATE SET
+      engine = excluded.engine,
+      model = excluded.model,
+      facts_extracted = excluded.facts_extracted,
+      facts_inserted = excluded.facts_inserted,
+      facts_updated = excluded.facts_updated,
+      facts_skipped = excluded.facts_skipped,
+      duration_ms = excluded.duration_ms,
+      status = excluded.status,
+      error = excluded.error,
+      created = excluded.created
+  `).run(filePath, hash, engine, model, facts, inserted, updated, skipped, durationMs, status, error ?? null);
 }
 
 export async function extractFactsFromFile(filePath, options = {}) {

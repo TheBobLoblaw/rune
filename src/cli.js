@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { DB_PATH, openDb, nowIso } from './db.js';
 import { colors } from './colors.js';
 import { factsToMarkdown } from './format.js';
-import { extractFactsFromFile } from './extract.js';
+import { extractFactsFromFile, wasAlreadyExtracted, logExtraction } from './extract.js';
 import { runTestSuites } from './test-runner.js';
 import { UserError } from './errors.js';
 
@@ -364,14 +364,58 @@ function storeSessionSummary(db, summary) {
 }
 
 async function runExtractOne(file, options) {
-  const extraction = await extractFactsFromFile(file, {
-    engine: options.engine,
-    model: options.model,
-    verbose: Boolean(options.verbose)
-  });
+  const startMs = Date.now();
+  const content = fs.readFileSync(file, 'utf8');
+
+  // Skip files already extracted (unless --force)
+  if (!options.dryRun && !options.force) {
+    const db = openDb();
+    const already = wasAlreadyExtracted(db, file, content);
+    db.close();
+    if (already) {
+      if (options.verbose) {
+        console.log(colors.dim(`${file}: already extracted (use --force to re-extract)`));
+      }
+      return { facts: 0, inserted: 0, updated: 0, skipped: 0, summaryStored: false, skippedFile: true };
+    }
+  }
+
+  let extraction;
+  try {
+    extraction = await extractFactsFromFile(file, {
+      engine: options.engine,
+      model: options.model,
+      verbose: Boolean(options.verbose)
+    });
+  } catch (err) {
+    const durationMs = Date.now() - startMs;
+    // Log failed extraction so we can debug
+    if (!options.dryRun) {
+      const db = openDb();
+      logExtraction(db, {
+        filePath: file, content, engine: options.engine || 'auto',
+        model: options.model || 'default', facts: 0, inserted: 0,
+        updated: 0, skipped: 0, durationMs, status: 'error',
+        error: err.message || String(err)
+      });
+      db.close();
+    }
+    throw err;
+  }
+
+  const durationMs = Date.now() - startMs;
 
   if (extraction.facts.length === 0 && !hasSessionSummary(extraction.session_summary)) {
     console.log(colors.yellow(`${file}: no useful extraction output`));
+    if (!options.dryRun) {
+      const db = openDb();
+      logExtraction(db, {
+        filePath: file, content, engine: extraction.engine,
+        model: options.model || 'default', facts: 0, inserted: 0,
+        updated: 0, skipped: 0, durationMs, status: 'empty'
+      });
+      db.close();
+    }
     return { facts: 0, inserted: 0, updated: 0, skipped: 0, summaryStored: false };
   }
 
@@ -383,7 +427,7 @@ async function runExtractOne(file, options) {
     if (hasSessionSummary(extraction.session_summary)) {
       console.log(colors.dim(`session_summary decisions=${extraction.session_summary.decisions.length} open_questions=${extraction.session_summary.open_questions.length} action_items=${extraction.session_summary.action_items.length} topics=${extraction.session_summary.topics.length}`));
     }
-    console.log(colors.dim(`${extraction.facts.length} fact(s) extracted${extraction.chunks > 1 ? ` across ${extraction.chunks} chunk(s)` : ''}`));
+    console.log(colors.dim(`${extraction.facts.length} fact(s) extracted in ${(durationMs/1000).toFixed(1)}s [${extraction.engine}]${extraction.chunks > 1 ? ` across ${extraction.chunks} chunk(s)` : ''}`));
     return {
       facts: extraction.facts.length,
       inserted: 0,
@@ -396,11 +440,19 @@ async function runExtractOne(file, options) {
   const db = openDb();
   const result = applyExtractedFacts(db, extraction.facts);
   const summaryKey = storeSessionSummary(db, extraction.session_summary);
+
+  logExtraction(db, {
+    filePath: file, content, engine: extraction.engine,
+    model: options.model || 'default', facts: extraction.facts.length,
+    inserted: result.inserted, updated: result.updated,
+    skipped: result.skipped, durationMs, status: 'ok'
+  });
   db.close();
 
   const changedMsg = `inserted=${result.inserted} updated=${result.updated} skipped=${result.skipped}`;
   const summaryMsg = summaryKey ? ` summary=${summaryKey}` : '';
-  console.log(colors.green(`${file}: extracted=${extraction.facts.length} ${changedMsg}${summaryMsg}`));
+  const timeMsg = ` (${(durationMs/1000).toFixed(1)}s ${extraction.engine})`;
+  console.log(colors.green(`${file}: extracted=${extraction.facts.length} ${changedMsg}${summaryMsg}${timeMsg}`));
   return {
     facts: extraction.facts.length,
     inserted: result.inserted,
@@ -721,6 +773,7 @@ export function runCli(argv) {
     .option('--dry-run', 'Print extracted facts without writing')
     .option('--engine <engine>', 'Extraction engine: anthropic, openai, ollama, or auto (default: auto)', 'auto')
     .option('--model <model>', 'Model name (default depends on engine)')
+    .option('--force', 'Re-extract even if file was already processed')
     .option('--verbose', 'Show extraction prompt and raw model response')
     .action(async (file, options) => {
       requireFile(file);
@@ -737,6 +790,7 @@ export function runCli(argv) {
     .option('--dry-run', 'Print extracted facts without writing')
     .option('--engine <engine>', 'Extraction engine: anthropic, openai, ollama, or auto (default: auto)', 'auto')
     .option('--model <model>', 'Model name (default depends on engine)')
+    .option('--force', 'Re-extract even if files were already processed')
     .option('--verbose', 'Show extraction prompt and raw model response')
     .action(async (directory, options) => {
       requireDirectory(directory);
@@ -752,17 +806,24 @@ export function runCli(argv) {
       let totalUpdated = 0;
       let totalSkipped = 0;
       let totalSummaries = 0;
+      let totalSkippedFiles = 0;
       for (const file of files) {
-        const res = await runExtractOne(file, options);
-        totalFacts += res.facts;
-        totalInserted += res.inserted;
-        totalUpdated += res.updated;
-        totalSkipped += res.skipped;
-        totalSummaries += res.summaryStored ? 1 : 0;
+        try {
+          const res = await runExtractOne(file, options);
+          totalFacts += res.facts;
+          totalInserted += res.inserted;
+          totalUpdated += res.updated;
+          totalSkipped += res.skipped;
+          totalSummaries += res.summaryStored ? 1 : 0;
+          if (res.skippedFile) totalSkippedFiles += 1;
+        } catch (err) {
+          console.log(colors.red(`${file}: ${err.message || String(err)}`));
+        }
       }
 
       const header = options.dryRun ? 'Batch dry-run complete' : 'Batch extract complete';
-      const counts = `files=${files.length} facts=${totalFacts} inserted=${totalInserted} updated=${totalUpdated} skipped=${totalSkipped} summaries=${totalSummaries}`;
+      const processed = files.length - totalSkippedFiles;
+      const counts = `files=${files.length} processed=${processed} skipped_unchanged=${totalSkippedFiles} facts=${totalFacts} inserted=${totalInserted} updated=${totalUpdated} skipped=${totalSkipped} summaries=${totalSummaries}`;
       console.log(colors.green(`${header}: ${counts}`));
     });
 

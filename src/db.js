@@ -65,6 +65,27 @@ CREATE TRIGGER IF NOT EXISTS facts_au AFTER UPDATE ON facts BEGIN
 END;
 `;
 
+const EXTRACTION_LOG_SQL = `
+CREATE TABLE IF NOT EXISTS extraction_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_path TEXT NOT NULL,
+  file_hash TEXT NOT NULL,
+  engine TEXT NOT NULL,
+  model TEXT NOT NULL,
+  facts_extracted INTEGER DEFAULT 0,
+  facts_inserted INTEGER DEFAULT 0,
+  facts_updated INTEGER DEFAULT 0,
+  facts_skipped INTEGER DEFAULT 0,
+  duration_ms INTEGER,
+  status TEXT DEFAULT 'ok',
+  error TEXT,
+  created TEXT NOT NULL,
+  UNIQUE(file_path, file_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_extraction_log_path ON extraction_log(file_path);
+CREATE INDEX IF NOT EXISTS idx_extraction_log_created ON extraction_log(created);
+`;
+
 const FACT_POST_MIGRATION_INDEXES_SQL = `
 CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(scope);
 CREATE INDEX IF NOT EXISTS idx_facts_tier ON facts(tier);
@@ -123,6 +144,8 @@ export function openDb(dbPath = DB_PATH) {
   if (!hadFtsTable || migratedColumns) {
     rebuildFtsIndex(db);
   }
+
+  db.exec(EXTRACTION_LOG_SQL);
 
   return db;
 }
