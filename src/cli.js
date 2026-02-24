@@ -778,6 +778,217 @@ export function runCli(argv) {
       }
     });
 
+  program.command('proactive <message>')
+    .description('Proactive memory - volunteer relevant context unprompted (Phase 5: T-031)')
+    .option('--engine <engine>', 'Scoring engine', 'ollama')
+    .option('--model <model>', 'Model for scoring') 
+    .option('--style <style>', 'Response style: summary, tips, warnings, context', 'context')
+    .option('--quiet', 'Return empty if no strong matches (relevance < 0.7)')
+    .action(async (message, options) => {
+      try {
+        const { generateProactiveMemory } = await import('./proactive.js');
+        
+        const response = await generateProactiveMemory(message, {
+          engine: options.engine,
+          model: options.model,
+          style: options.style,
+          quietMode: options.quiet
+        });
+
+        if (response.trim()) {
+          console.log(response);
+        } else if (!options.quiet) {
+          console.log(colors.dim('(No proactive context available)'));
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Proactive memory failed: ${err.message}`));
+      }
+    });
+
+  program.command('remember <query>')
+    .description('Search memory with trigger phrases like "remember when" (Phase 5: T-032)')  
+    .option('--limit <n>', 'Max results to return', '10')
+    .option('--days <n>', 'Search within N days', '30')
+    .option('--json', 'Output as JSON')
+    .action((query, options) => {
+      const db = openDb();
+      const limit = parseInt(options.limit, 10) || 10;
+      const daysBack = parseInt(options.days, 10) || 30;
+      const cutoffDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
+      
+      // Multi-source search for memory patterns
+      const results = {
+        facts: [],
+        events: [],
+        changes: []
+      };
+      
+      // FTS search in facts
+      const ftsQuery = toFtsQuery(query);
+      try {
+        results.facts = db.prepare(`
+          SELECT f.*, bm25(facts_fts) as rank
+          FROM facts_fts
+          JOIN facts f ON f.id = facts_fts.rowid  
+          WHERE facts_fts MATCH ? AND f.updated > ?
+          ORDER BY bm25(facts_fts)
+          LIMIT ?
+        `).all(ftsQuery, cutoffDate, limit);
+      } catch {
+        // Fallback to LIKE search
+        results.facts = db.prepare(`
+          SELECT * FROM facts
+          WHERE (LOWER(key) LIKE ? OR LOWER(value) LIKE ?) AND updated > ?
+          ORDER BY updated DESC LIMIT ?
+        `).all(`%${query.toLowerCase()}%`, `%${query.toLowerCase()}%`, cutoffDate, limit);
+      }
+      
+      // Search performance events
+      results.events = db.prepare(`
+        SELECT * FROM performance_log
+        WHERE LOWER(detail) LIKE ? AND created > ?
+        ORDER BY created DESC LIMIT ?
+      `).all(`%${query.toLowerCase()}%`, cutoffDate, Math.floor(limit / 2));
+      
+      // Search changelog
+      results.changes = db.prepare(`
+        SELECT * FROM changelog
+        WHERE (LOWER(key) LIKE ? OR LOWER(old_value) LIKE ? OR LOWER(new_value) LIKE ?) 
+              AND created > ?
+        ORDER BY created DESC LIMIT ?
+      `).all(`%${query.toLowerCase()}%`, `%${query.toLowerCase()}%`, `%${query.toLowerCase()}%`, cutoffDate, Math.floor(limit / 2));
+      
+      db.close();
+      
+      if (options.json) {
+        console.log(JSON.stringify(results, null, 2));
+        return;
+      }
+      
+      const total = results.facts.length + results.events.length + results.changes.length;
+      if (total === 0) {
+        console.log(colors.yellow(`No memories found for "${query}" in the last ${daysBack} days`));
+        return;
+      }
+      
+      console.log(colors.bold(`🧠 Remember: "${query}"`));
+      console.log('');
+      
+      if (results.facts.length > 0) {
+        console.log(colors.bold('Facts:'));
+        results.facts.forEach(f => {
+          console.log(`  ${f.category}/${f.key}: ${f.value}`);
+          console.log(colors.dim(`    (${f.updated.substring(0, 10)})`));
+        });
+        console.log('');
+      }
+      
+      if (results.events.length > 0) {
+        console.log(colors.bold('Events:'));
+        results.events.forEach(e => {
+          const icon = e.event_type === 'mistake' ? '❌' : e.event_type === 'success' ? '✅' : '📝';
+          console.log(`  ${icon} ${e.event_type}: ${e.detail}`);
+          console.log(colors.dim(`    (${e.created.substring(0, 10)})`));
+        });
+        console.log('');
+      }
+      
+      if (results.changes.length > 0) {
+        console.log(colors.bold('Changes:'));
+        results.changes.forEach(c => {
+          console.log(`  ~ ${c.key}: ${c.old_value} → ${c.new_value}`);
+          console.log(colors.dim(`    (${c.created.substring(0, 10)})`));
+        });
+        console.log('');
+      }
+      
+      console.log(colors.dim(`${total} result(s) from last ${daysBack} days`));
+    });
+
+  program.command('session-style <message>')
+    .description('Detect interaction style for adaptive responses (Phase 5: T-029)')
+    .option('--save', 'Save to session metadata store')
+    .option('--session-id <id>', 'Session identifier')
+    .action(async (message, options) => {
+      try {
+        const { detectInteractionStyle, saveSessionMetadata } = await import('./session-intel.js');
+        
+        const analysis = detectInteractionStyle(message);
+        
+        console.log(colors.bold(`🎭 Style Analysis: "${message}"`));
+        console.log('');
+        console.log(`**Primary Style:** ${analysis.primary}`);
+        console.log(`**Confidence:** ${analysis.confidence.toFixed(2)}`);
+        console.log(`**Indicators:** ${analysis.indicators.join(', ')}`);
+        
+        if (analysis.mood) {
+          console.log(`**Mood:** ${analysis.mood}`);
+        }
+        
+        if (analysis.urgency) {
+          console.log(`**Urgency:** ${analysis.urgency}`);
+        }
+        
+        if (options.save) {
+          const sessionId = options.sessionId || 'default';
+          saveSessionMetadata(sessionId, {
+            style: analysis.primary,
+            confidence: analysis.confidence,
+            mood: analysis.mood,
+            urgency: analysis.urgency,
+            message: message.substring(0, 100)  // First 100 chars for reference
+          });
+          console.log(colors.green(`\nSaved to session ${sessionId}`));
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Style detection failed: ${err.message}`));
+      }
+    });
+
+  program.command('session-patterns [sessionId]')
+    .description('Analyze session patterns and behavior (Phase 5: T-033)')
+    .option('--days <n>', 'Look back N days', '30')
+    .option('--json', 'Output as JSON')
+    .action(async (sessionId = 'default', options) => {
+      try {
+        const { getSessionPatterns } = await import('./session-intel.js');
+        
+        const analysis = getSessionPatterns(sessionId, parseInt(options.days, 10) || 30);
+        
+        if (options.json) {
+          console.log(JSON.stringify(analysis, null, 2));
+          return;
+        }
+        
+        console.log(colors.bold(`📊 Session Patterns: ${sessionId}`));
+        console.log('');
+        
+        if (analysis.patterns.session_count === 0) {
+          console.log(colors.yellow('No session data found'));
+          return;
+        }
+        
+        console.log(colors.bold('Patterns:'));
+        console.log(`  Preferred Style: ${analysis.patterns.preferred_style}`);
+        console.log(`  Common Moods: ${analysis.patterns.common_moods.join(', ') || 'none detected'}`);
+        console.log(`  Frequent Topics: ${analysis.patterns.frequent_topics.join(', ') || 'none detected'}`);
+        console.log(`  Session Count: ${analysis.patterns.session_count}`);
+        console.log('');
+        
+        if (analysis.insights.length > 0) {
+          console.log(colors.bold('Insights:'));
+          analysis.insights.forEach(insight => {
+            console.log(`  • ${insight}`);
+          });
+        }
+        
+      } catch (err) {
+        console.log(colors.red(`Pattern analysis failed: ${err.message}`));
+      }
+    });
+
   program.command('recall <topic>')
     .description('Smart recall — pull all relevant context for a topic (facts, decisions, lessons, people, history)')
     .option('--json', 'Output as JSON for programmatic use')
