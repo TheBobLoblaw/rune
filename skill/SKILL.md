@@ -1,3 +1,12 @@
+---
+name: rune
+version: 1.0.2
+description: Self-improving AI memory system with intelligent context injection and adaptive learning
+keywords: [self-improvement, intelligent-memory, adaptive, context-injection, project-management]
+homepage: https://github.com/TheBobLoblaw/rune
+metadata: {"install":[{"id":"brokkr-mem","kind":"script","script":"./install.sh","label":"Install Rune Memory System"}]}
+---
+
 # Rune - Persistent AI Memory System
 
 **Rune** gives your OpenClaw agent persistent, intelligent memory that gets better over time. No more burning tokens on static context files or forgetting important information between sessions.
