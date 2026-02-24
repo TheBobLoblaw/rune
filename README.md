@@ -232,3 +232,8 @@ MIT — Free for personal and commercial use
 
 ## 🌟 Keywords
 `ai-memory` `persistent-storage` `context-injection` `self-improving-ai` `sqlite` `ollama` `openai` `anthropic` `project-management` `autonomous-agents` `memory-consolidation` `pattern-learning` `openclaw` `local-first` `production-ready`
+## Security Update v1.0.2
+- Fixed shell injection vulnerability in session hooks
+- Added input sanitization for all user input
+- Implemented secure session handler
+

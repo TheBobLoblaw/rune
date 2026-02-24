@@ -103,15 +103,21 @@ fi
 ```
 
 ### Session Hooks
-Add to your agent startup:
+The skill automatically provides secure session hooks via OpenClaw integrations.
+
+For manual usage, use the secure session handler:
 
 ```bash
-# Load dynamic context
-brokkr-mem recall "$(echo $MESSAGE | head -c 100)"
+# Secure session hooks (input sanitized automatically)
+./rune-session-handler.sh start   # Loads dynamic context safely
+./rune-session-handler.sh end     # Tracks session style safely
 
-# Track session style
-brokkr-mem session-style "$MESSAGE" --save --session-id "$SESSION_ID"
+# Direct usage (SECURE - input is sanitized):
+SAFE_MESSAGE=$(echo "$MESSAGE" | head -c 200 | tr -d '`$(){}[]|;&<>' | sed 's/[^a-zA-Z0-9 ._-]//g')
+brokkr-mem recall "$SAFE_MESSAGE" --limit 10
 ```
+
+⚠️ **Security Note**: Never pass unsanitized user input directly to shell commands. Always use the provided session handler or sanitize input manually.
 
 ## Architecture
 
