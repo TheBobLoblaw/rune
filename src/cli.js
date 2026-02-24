@@ -1119,6 +1119,57 @@ export function runCli(argv) {
       process.stdout.write(factsToMarkdown(rows));
     });
 
+  program.command('why <query>')
+    .description('Look up why a decision was made — searches decisions, lessons, and changelog')
+    .action((query, options) => {
+      const db = openDb();
+      const q = query.toLowerCase();
+
+      // Search decisions
+      const decisions = db.prepare(
+        "SELECT * FROM facts WHERE category IN ('decision', 'lesson') AND (LOWER(key) LIKE ? OR LOWER(value) LIKE ?) ORDER BY updated DESC"
+      ).all(`%${q}%`, `%${q}%`);
+
+      // Search changelog for related changes
+      const changes = db.prepare(
+        "SELECT * FROM changelog WHERE LOWER(key) LIKE ? OR LOWER(old_value) LIKE ? OR LOWER(new_value) LIKE ? ORDER BY created DESC LIMIT 10"
+      ).all(`%${q}%`, `%${q}%`, `%${q}%`);
+
+      if (decisions.length === 0 && changes.length === 0) {
+        console.log(colors.yellow(`No decisions or history found for "${query}"`));
+        db.close();
+        return;
+      }
+
+      if (decisions.length > 0) {
+        console.log(colors.bold(`Decisions & Lessons (${decisions.length})`));
+        console.log('');
+        for (const d of decisions) {
+          const icon = d.category === 'decision' ? '⚖️' : '💡';
+          const date = d.updated.split('T')[0];
+          const source = d.source ? ` (source: ${d.source})` : '';
+          console.log(`${icon}  ${colors.bold(d.key)}`);
+          console.log(`   ${d.value}`);
+          console.log(colors.dim(`   ${date} | ${d.scope} | confidence ${d.confidence.toFixed(2)}${source}`));
+          console.log('');
+        }
+      }
+
+      if (changes.length > 0) {
+        console.log(colors.bold(`Change History (${changes.length})`));
+        for (const c of changes) {
+          const date = c.created.split('T')[0];
+          if (c.change_type === 'created') {
+            console.log(`${colors.green('+')} ${colors.dim(date)} ${c.category}/${c.key} = ${c.new_value}`);
+          } else {
+            console.log(`${colors.yellow('~')} ${colors.dim(date)} ${c.category}/${c.key}: ${colors.red(c.old_value)} → ${colors.green(c.new_value)}`);
+          }
+        }
+      }
+
+      db.close();
+    });
+
   program.command('history [key]')
     .description('Show change history for a fact or all recent changes')
     .option('--limit <n>', 'Max entries to show', '20')
@@ -1145,6 +1196,114 @@ export function runCli(argv) {
         }
       }
       console.log(colors.dim(`\n${rows.length} change(s)`));
+      db.close();
+    });
+
+  program.command('log <type> <detail>')
+    .description('Log a performance event (mistake, success, skill-used, forgot, pattern)')
+    .option('--severity <level>', 'Severity: info, warning, error', 'info')
+    .option('--category <cat>', 'Category for grouping')
+    .action((type, detail, options) => {
+      const validTypes = ['mistake', 'success', 'skill-used', 'forgot', 'pattern', 'lesson', 'feedback'];
+      if (!validTypes.includes(type)) {
+        console.log(colors.red(`Invalid type. Use: ${validTypes.join(', ')}`));
+        return;
+      }
+      const db = openDb();
+      db.prepare(`
+        INSERT INTO performance_log (event_type, category, detail, severity, created)
+        VALUES (?, ?, ?, ?, datetime('now'))
+      `).run(type, options.category || null, detail, options.severity);
+      db.close();
+      console.log(colors.green(`Logged: ${type} — ${detail}`));
+    });
+
+  program.command('review')
+    .description('Self-review: show performance patterns, recurring mistakes, skill gaps')
+    .option('--days <n>', 'Look back N days', '7')
+    .action((options) => {
+      const db = openDb();
+      const days = parseInt(options.days, 10) || 7;
+      const since = new Date(Date.now() - days * 86400000).toISOString();
+
+      // Get all events in window
+      const events = db.prepare(
+        "SELECT * FROM performance_log WHERE created >= ? ORDER BY created DESC"
+      ).all(since);
+
+      // Count by type
+      const typeCounts = {};
+      for (const e of events) {
+        typeCounts[e.event_type] = (typeCounts[e.event_type] || 0) + 1;
+      }
+
+      // Find recurring patterns (same detail appearing 2+)
+      const detailCounts = {};
+      for (const e of events) {
+        const key = `${e.event_type}:${e.detail}`;
+        detailCounts[key] = (detailCounts[key] || 0) + 1;
+      }
+      const recurring = Object.entries(detailCounts).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]);
+
+      // Get fact changes in window
+      const factChanges = db.prepare(
+        "SELECT change_type, COUNT(*) as n FROM changelog WHERE created >= ? GROUP BY change_type"
+      ).all(since);
+
+      // Get extraction stats
+      const extractions = db.prepare(
+        "SELECT COUNT(*) as n, SUM(facts_extracted) as total_facts, AVG(duration_ms) as avg_ms FROM extraction_log WHERE created >= ?"
+      ).get(since);
+
+      console.log(colors.bold(`Self-Review — Last ${days} Days`));
+      console.log('');
+
+      if (Object.keys(typeCounts).length > 0) {
+        console.log(colors.bold('Performance Events:'));
+        for (const [type, count] of Object.entries(typeCounts).sort((a, b) => b[1] - a[1])) {
+          const icon = type === 'mistake' ? '❌' : type === 'success' ? '✅' : type === 'forgot' ? '🧠' : type === 'skill-used' ? '🔧' : '📝';
+          console.log(`  ${icon} ${type}: ${count}`);
+        }
+        console.log('');
+      }
+
+      if (recurring.length > 0) {
+        console.log(colors.bold('⚠️  Recurring Patterns:'));
+        for (const [key, count] of recurring.slice(0, 5)) {
+          console.log(`  ${count}x — ${key}`);
+        }
+        console.log('');
+      }
+
+      if (factChanges.length > 0) {
+        console.log(colors.bold('Fact Changes:'));
+        for (const row of factChanges) {
+          console.log(`  ${row.change_type}: ${row.n}`);
+        }
+        console.log('');
+      }
+
+      if (extractions && extractions.n > 0) {
+        console.log(colors.bold('Extractions:'));
+        console.log(`  Runs: ${extractions.n} | Facts: ${extractions.total_facts || 0} | Avg: ${Math.round(extractions.avg_ms || 0)}ms`);
+        console.log('');
+      }
+
+      if (events.length === 0 && factChanges.length === 0) {
+        console.log(colors.yellow('No activity logged yet. Use "brokkr-mem log" to track events.'));
+      }
+
+      // Top lessons from facts
+      const lessons = db.prepare(
+        "SELECT key, value FROM facts WHERE category = 'lesson' ORDER BY updated DESC LIMIT 5"
+      ).all();
+      if (lessons.length > 0) {
+        console.log(colors.bold('Top Lessons:'));
+        for (const l of lessons) {
+          console.log(`  💡 ${l.key}: ${l.value}`);
+        }
+      }
+
       db.close();
     });
 

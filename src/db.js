@@ -103,6 +103,20 @@ CREATE INDEX IF NOT EXISTS idx_changelog_fact ON changelog(fact_id);
 CREATE INDEX IF NOT EXISTS idx_changelog_created ON changelog(created);
 `;
 
+const PERFORMANCE_LOG_SQL = `
+CREATE TABLE IF NOT EXISTS performance_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_type TEXT NOT NULL,
+  category TEXT,
+  detail TEXT NOT NULL,
+  severity TEXT DEFAULT 'info',
+  session_id TEXT,
+  created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_perf_type ON performance_log(event_type);
+CREATE INDEX IF NOT EXISTS idx_perf_created ON performance_log(created);
+`;
+
 const FACT_POST_MIGRATION_INDEXES_SQL = `
 CREATE INDEX IF NOT EXISTS idx_facts_scope ON facts(scope);
 CREATE INDEX IF NOT EXISTS idx_facts_tier ON facts(tier);
@@ -164,6 +178,7 @@ export function openDb(dbPath = DB_PATH) {
 
   db.exec(EXTRACTION_LOG_SQL);
   db.exec(CHANGELOG_SQL);
+  db.exec(PERFORMANCE_LOG_SQL);
 
   return db;
 }
