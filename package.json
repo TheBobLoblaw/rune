@@ -1,6 +1,6 @@
 {
   "name": "brokkr-mem",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Persistent fact memory CLI for Brokkr",
   "type": "module",
   "bin": {
