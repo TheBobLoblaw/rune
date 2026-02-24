@@ -304,22 +304,31 @@ function scoreExtraction(extractedFacts, expectedFacts) {
   let truePositive = 0;
 
   for (const got of extractedFacts) {
-    let matchedIndex = -1;
+    let bestIndex = -1;
+    let bestScore = 0;
     for (let i = 0; i < expectedFacts.length; i += 1) {
       if (usedExpected.has(i)) {
         continue;
       }
       const expected = expectedFacts[i];
-      const sameCategory = normalizeText(got.category) === normalizeText(expected.category);
       const valueMatch = overlapText(got.value, expected.value);
       const keyMatch = keySimilar(got.key, expected.key);
-      if (sameCategory && (valueMatch || keyMatch)) {
-        matchedIndex = i;
-        break;
+      const sameCategory = normalizeText(got.category) === normalizeText(expected.category);
+
+      // Score: value or key match is sufficient. Category is a bonus.
+      let score = 0;
+      if (valueMatch) score += 2;
+      if (keyMatch) score += 2;
+      if (sameCategory) score += 1;
+
+      // Must have at least a value OR key match to count
+      if (score >= 2 && score > bestScore) {
+        bestScore = score;
+        bestIndex = i;
       }
     }
-    if (matchedIndex >= 0) {
-      usedExpected.add(matchedIndex);
+    if (bestIndex >= 0) {
+      usedExpected.add(bestIndex);
       truePositive += 1;
     }
   }
