@@ -4,6 +4,24 @@ All notable changes to Rune (Self-Improving AI Memory System) will be documented
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-02-25
+
+### 🚨 CRITICAL SECURITY FIX
+
+#### Security
+- **FIXED RCE vulnerability in context-inject.sh** - Added input sanitization to prevent shell injection attacks
+- **CVE Impact**: Unsanitized $TOPIC parameter was vulnerable to command injection (e.g., `'; rm -rf / #'`)
+- **Resolution**: Applied same sanitization pattern as rune-session-handler.sh to workflow scripts
+- **Scope**: Fixed both local scripts and setup-workflow.sh generated scripts
+
+#### Changed
+- **setup-workflow.sh** - Now creates secure context-inject.sh with input sanitization
+- **Security documentation** - Enhanced warnings about input validation in workflow scripts
+
+#### Lessons
+- **Shell injection prevention** - ALL user inputs in shell scripts must be sanitized
+- **Security review process** - Third-party security analysis caught vulnerability we missed
+
 ## [1.1.2] - 2026-02-25
 
 ### 📋 Documentation Accuracy & Housekeeping

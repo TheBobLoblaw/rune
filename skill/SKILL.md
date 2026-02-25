@@ -1,6 +1,6 @@
 ---
 name: rune
-version: 1.1.2
+version: 1.1.3
 description: Self-improving AI memory system with intelligent context injection and adaptive learning
 keywords: [self-improvement, intelligent-memory, adaptive, context-injection, project-management]
 homepage: https://github.com/TheBobLoblaw/rune

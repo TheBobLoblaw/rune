@@ -35,20 +35,35 @@ SESSIONEOF
 
 chmod +x ~/.openclaw/workspace/scripts/session-start.sh
 
-# Create context injection helper
+# Create context injection helper with SECURITY SANITIZATION
 cat > ~/.openclaw/workspace/scripts/context-inject.sh << 'CONTEXTEOF'
 #!/bin/bash
 TOPIC="$1"
 
-echo "🧠 INJECTING CONTEXT FOR: $TOPIC"
+# Security function to sanitize input - prevents shell injection
+sanitize_input() {
+  local input="$1"
+  
+  # Remove dangerous characters and limit length
+  echo "$input" | \
+    head -c 500 | \
+    tr -d '`$(){}[]|;&<>' | \
+    sed 's/[^a-zA-Z0-9 ._-]//g' | \
+    head -c 200
+}
+
+# Sanitize the topic input to prevent shell injection attacks
+SAFE_TOPIC=$(sanitize_input "$TOPIC")
+
+echo "🧠 INJECTING CONTEXT FOR: $SAFE_TOPIC"
 echo "=================================="
 
-# Search for relevant context
+# Search for relevant context using SANITIZED input
 echo "📋 Relevant context:"
-rune recall "$TOPIC" 2>/dev/null || rune search "$TOPIC" | head -5
+rune recall "$SAFE_TOPIC" 2>/dev/null || rune search "$SAFE_TOPIC" | head -5
 
-# Log usage
-echo "$(date): Context recalled for '$TOPIC'" >> /tmp/rune-usage.log
+# Log usage with sanitized input
+echo "$(date): Context recalled for '$SAFE_TOPIC'" >> /tmp/rune-usage.log
 
 echo ""
 echo "✅ Context loaded. Proceed with informed response."
