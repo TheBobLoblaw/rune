@@ -1,69 +1,65 @@
 ---
 name: rune
-version: 1.1.5
-description: Self-improving AI memory system with intelligent context injection and adaptive learning
-keywords: [self-improvement, intelligent-memory, adaptive, context-injection, project-management]
+version: 1.1.6
+description: Persistent AI memory system with intelligent context injection and adaptive learning
+keywords: [persistent-memory, context-injection, project-management, sqlite, local-first]
 homepage: https://github.com/TheBobLoblaw/rune
 metadata: {"install":[{"id":"rune","kind":"script","script":"./install.sh","label":"Install Rune Memory System"}]}
 ---
 
 # Rune - Persistent AI Memory System
 
-**Rune** gives your OpenClaw agent persistent, intelligent memory that gets better over time. No more burning tokens on static context files or forgetting important information between sessions.
+**Rune** provides persistent memory for OpenClaw agents using SQLite storage, intelligent fact retrieval, and adaptive context injection.
 
-## What Rune Does
+## Features
 
-### 🧠 Smart Memory Management
-- **Dynamic Context Injection**: AI selects only relevant facts for each conversation  
-- **Access Pattern Learning**: Frequently used facts get prioritized
-- **Forgetting Curves**: Unused facts naturally fade like human memory
-- **Memory Consolidation**: Similar facts get merged, verbose ones compressed
+### Memory Management
+- **Dynamic Context Injection**: Selects relevant facts for each conversation  
+- **Access Pattern Learning**: Prioritizes frequently used facts
+- **Memory Consolidation**: Merges similar facts and compresses verbose ones
+- **Temporal Queries**: Time-based fact retrieval
 
-### 🎯 Session Intelligence  
-- **Interaction Style Detection**: Learns if you prefer brainstorm vs deep-work vs debug modes
-- **Behavioral Pattern Analysis**: Tracks your work patterns and preferences over time
-- **Proactive Memory**: Volunteers relevant context unprompted ("last time you worked on this...")
+### Intelligence Features
+- **Interaction Style Detection**: Learns conversation preferences over time
+- **Behavioral Pattern Analysis**: Tracks work patterns and preferences
+- **Proactive Memory**: Surfaces relevant context when appropriate
 
-### 📋 Project Autopilot
-- **Smart Task Recommendations**: "What should I work on next?" with priority scoring
-- **Blocker Detection**: Identifies stuck projects that need intervention  
-- **Project Health Scoring**: 0.0-1.0 health scores based on activity and progress
+### Project Management
+- **Task Recommendations**: Suggests next steps based on project state
+- **Blocker Detection**: Identifies projects that need attention
+- **Project Health Scoring**: Quantifies project progress and health
 
-### 📢 Intelligent Notifications
-- **Priority Classification**: Critical/High/Medium/Low/FYI with context analysis
-- **Smart Timing**: Respects quiet hours, batches low-priority updates
-- **Channel Routing**: DM for urgent, Discord for projects, digest for FYI
+### Notification System
+- **Priority Classification**: Categorizes notifications by importance
+- **Smart Timing**: Respects user preferences for notification timing
+- **Channel Routing**: Routes notifications to appropriate channels
 
-### 🔄 Self-Improvement Loop
-- **Pattern Detection**: "Forgot to use X skill 3 times" → automatic escalation
-- **Performance Tracking**: Measurable improvement over time
-- **Skill Usage Analysis**: Which skills you use vs neglect
+## Naming Convention
 
-## About Rune vs rune
+- **Skill name**: `rune` (ClawHub package)
+- **CLI command**: `rune` (terminal interface)
+- **Project name**: Rune (overall system)
 
-**Rune** is the OpenClaw skill name. **rune** is the CLI tool name. Think of Rune as the "skill package" and rune as the "command-line interface" - like how the `git` skill package provides the `git` CLI.
+## Installation Requirements
 
-- **Skill name**: `rune` (what you install via ClawHub)  
-- **CLI command**: `rune` (what you run in terminal)
-- **Repository**: https://github.com/TheBobLoblaw/rune
+### System Dependencies
+- Node.js v18+ with npm
+- SQLite3 (included via better-sqlite3 npm package)
+- Optional: Ollama for local LLM features
 
-## Installation Disclosure
+### Installation Process
+The installation process will:
+- Create directories under `~/.openclaw/`
+- Install the `rune` CLI globally via npm
+- Create SQLite database at `~/.openclaw/memory.db`
+- Modify existing `HEARTBEAT.md` if present
 
-**⚠️ What This Installation Does:**
+### Before Installing
+- Back up important configuration files
+- Review package.json dependencies if security is a concern
+- Consider using local models (Ollama) instead of cloud APIs
 
-The Rune skill installation will:
-- **Create directories**: `~/.openclaw/` and subdirectories
-- **Install globally**: `rune` CLI via npm (requires npm dependencies)
-- **Create database**: SQLite database at `~/.openclaw/memory.db`
-- **Modify files**: Appends integration lines to existing `~/.openclaw/workspace/HEARTBEAT.md`
-- **Add session hooks**: Automatic memory integration for OpenClaw sessions
-
-**Before installing:**
-- **Back up** `HEARTBEAT.md` if it contains important data
-- **Review** `package.json` dependencies if security is critical
-- **Consider** using local models (Ollama) instead of cloud APIs for privacy
-
-## Installation
+## Installation Methods
 
 ```bash
 # Via ClawHub (recommended)
@@ -76,248 +72,192 @@ npm install --production
 npm install -g .
 ```
 
-## Quick Start
+## Basic Usage
 
 ```bash
-# Initialize memory system
+# Check system status
 rune stats
 
-# Add your first fact
+# Add facts
 rune add person cory.name "Cory - my human user"
+rune add project website.status "In progress"
 
-# Generate context for a conversation  
+# Search facts
+rune search "Cory"
+
+# Generate context
 rune context "Let's work on the website"
 
-# Get task recommendations
+# Task management
 rune next-task
+rune project-state website
 
-# Weekly self-review
-rune self-review --days 7
+# Maintenance
+rune consolidate
+rune expire
 ```
 
 ## Core Commands
 
-### Memory Management
+### Fact Management
 - `rune add <category> <key> <value>` - Store a fact
-- `rune search <query>` - Find facts
-- `rune recall <topic>` - Smart multi-source recall  
-- `rune inject` - Generate context file for agent
+- `rune get <category> [key]` - Retrieve facts
+- `rune search <query>` - Full-text search
+- `rune remove <category> <key>` - Delete facts
 
-### Intelligence Features  
-- `rune context <message>` - Dynamic context for message
-- `rune score <message>` - Relevance scoring  
-- `rune proactive <message>` - Volunteer relevant context
-- `rune session-style <message>` - Detect interaction style
+### Context Generation
+- `rune context <message>` - Generate relevant context
+- `rune inject` - Create context file
+- `rune score <message>` - Score fact relevance
+- `rune budget <message>` - Context within token limits
 
 ### Project Management
-- `rune project-state <name>` - Track project phases/blockers
-- `rune next-task` - Smart task picker
-- `rune stuck-projects` - Find blocked work
+- `rune project-state <name>` - Track project status
+- `rune next-task` - Get task recommendations
+- `rune stuck-projects` - Find blocked projects
 
-### Advanced Features
-- `rune temporal "last Tuesday"` - Time-based queries  
-- `rune consolidate` - Memory optimization
-- `rune forget` - Apply forgetting curves
-- `rune pattern-analysis` - Detect behavioral patterns
+### Intelligence Features
+- `rune session-style <message>` - Detect interaction style
+- `rune pattern-analysis` - Analyze behavioral patterns
+- `rune self-review` - Generate improvement insights
+
+### Maintenance
+- `rune consolidate` - Optimize memory storage
+- `rune expire` - Remove expired facts
+- `rune stats` - Show database statistics
+
+## Architecture
+
+- **Database**: SQLite with FTS5 full-text search
+- **LLM Integration**: Supports Ollama (local), Anthropic, OpenAI
+- **Storage Location**: `~/.openclaw/memory.db`
+- **Context Output**: Generates markdown for LLM consumption
+
+## Memory Categories
+
+- **person**: Individual information (names, roles, preferences)
+- **project**: Project status, phases, decisions
+- **tool**: Tool usage patterns and configurations
+- **lesson**: Learning from past experiences
+- **decision**: Record of choices and reasoning
+- **preference**: User settings and preferences
+- **environment**: System configuration (non-sensitive only)
 
 ## Integration with OpenClaw
 
 ### Heartbeat Integration
-Add to your `HEARTBEAT.md`:
+Add these lines to `HEARTBEAT.md` for automated maintenance:
 
-```bash
-# Memory maintenance
-rune expire && rune inject --output ~/.openclaw/workspace/FACTS.md
-
-# Proactive work selection
-NEXT_TASK=$(rune next-task --json)
-if [[ "$NEXT_TASK" != "null" ]]; then
-  # Work on the recommended task
-fi
+```markdown
+## Memory Maintenance
+- Memory expiration: `rune expire`
+- Context regeneration: `rune inject --output ~/.openclaw/workspace/FACTS.md`
+- Consolidation: `rune consolidate --auto-prioritize`
 ```
 
-### Session Hooks
-The skill automatically provides secure session hooks via OpenClaw integrations.
+### Session Integration
+The skill provides session hooks that integrate with OpenClaw's session lifecycle.
 
-For manual usage, use the secure session handler:
+For manual integration, refer to the provided session handler scripts in the installation.
 
-```bash
-# Secure session hooks (input sanitized automatically)
-./rune-session-handler.sh start   # Loads dynamic context safely
-./rune-session-handler.sh end     # Tracks session style safely
-
-# Direct usage (SECURE - input is sanitized):
-SAFE_MESSAGE=$(echo "$MESSAGE" | head -c 200 | tr -d '`$(){}[]|;&<>' | sed 's/[^a-zA-Z0-9 ._-]//g')
-rune recall "$SAFE_MESSAGE" --limit 10
-```
-
-⚠️ **Security Note**: Never pass unsanitized user input directly to shell commands. Always use the provided session handler or sanitize input manually.
-
-## Architecture
-
-- **SQLite Database**: All memory stored in `~/.openclaw/memory.db`
-- **Local LLM Integration**: Ollama for relevance scoring and extraction
-- **Cloud API Support**: Anthropic, OpenAI for advanced reasoning
-- **Local-First Design**: Works completely offline with Ollama (cloud APIs optional for advanced features)
-
-## Memory Categories
-
-- **person**: Information about people (names, roles, preferences)
-- **project**: Project status, phases, decisions
-- **tool**: How to use tools and their quirks  
-- **lesson**: Mistakes to avoid, best practices
-- **decision**: Why certain choices were made
-- **preference**: User likes/dislikes, settings
-- **environment**: System configs, non-sensitive settings (⚠️ NEVER store credentials!)
-
-## ⚠️ Security & Privacy
+## Security & Privacy
 
 ### Data Storage
 **What Rune Stores:**
-- Facts you explicitly add via `rune add`
-- Session interaction patterns for learning (conversation style, not content)
-- Project states and task recommendations
+- Facts explicitly added via commands
+- Session interaction patterns (style, not content)
+- Project states and task information
 
-**What Rune Does NOT Store (by default):**
-- Full conversation transcripts (unless you run `extract` manually)
-- API keys or credentials (use environment variables instead)
-- Sensitive personal information (unless you explicitly add it)
+**What Rune Does NOT Store:**
+- Full conversation transcripts (unless explicitly extracted)
+- API keys or credentials
+- Sensitive personal information (unless explicitly added)
+
+### Security Measures
+- Input sanitization for all user-provided data
+- Parameterized database queries to prevent injection
+- No execution of user-provided shell commands
+- Session handlers validate and limit input
+
+### Privacy Options
+- **Local-only operation**: Use Ollama for complete offline functionality
+- **Cloud API optional**: OpenAI/Anthropic APIs are optional for advanced features
+- **Fact review**: Regular review of stored facts recommended
+- **No credential storage**: Use environment variables for sensitive data
 
 ### Installation Security
-**NPM Dependencies:**
-- Installation fetches dependencies from npm registry at install time
-- Review `package.json` for dependencies if security is critical
-- Global npm install runs lifecycle scripts (standard npm behavior)
-- Consider installing in isolated environment (container/VM) for high-security use
+- Review package.json dependencies before installation
+- Installation runs standard npm lifecycle scripts
+- Consider isolated environment for high-security deployments
+- Session hooks process metadata only, not full content
 
-**Session Security:**
-- **Fixed CVE-2026-0001**: Input sanitization prevents shell injection
-- All user input sanitized before shell execution
-- Session handler validates and limits input length
+## Automated Maintenance
 
-### Cloud API Usage
-- **Optional**: Rune can use OpenAI/Anthropic APIs for fact extraction and scoring
-- **Local-first**: Works completely offline with Ollama (recommended for privacy)
-- **Your choice**: Configure which engines to use in your setup
-
-### Privacy Recommendations
-- **Use local models** (Ollama) for maximum privacy
-- **Avoid cloud APIs** if processing sensitive information
-- **Review stored facts** periodically with `rune search`
-- **Never store credentials** in memory - use environment variables
-
-**Privacy Best Practices:**
-- Never run `rune add` with sensitive data (passwords, API keys, personal info)
-- Use `rune extract` carefully - review files before extracting facts
-- Configure Ollama for local-only operation if you want zero cloud usage
-- Review your `~/.openclaw/workspace/FACTS.md` periodically
-
-**Installation Changes:**
-- Adds memory maintenance commands to `HEARTBEAT.md` (if present)
-- Creates `~/.openclaw/memory.db` database file
-- Session hooks may process conversation metadata (not full content) for learning
-
-## Performance Metrics
-
-With Rune, your agent will:
-- ✅ Remember context between sessions without burning tokens
-- ✅ Pick relevant facts dynamically vs dumping everything
-- ✅ Get measurably better at avoiding repeated mistakes  
-- ✅ Work autonomously on projects between check-ins
-- ✅ Learn your interaction patterns and adapt responses
-
-## Advanced Configuration
+### Recommended Cron Jobs
 
 ```bash
-# Tune relevance scoring
-rune score "your query" --threshold 0.6 --model llama3.1:8b
-
-# Configure forgetting curves  
-rune forget --decay-rate 0.03 --grace-days 45
-
-# Cross-session pattern analysis
-rune cross-session --days 90 --min-sessions 5
-```
-
-## Automated Maintenance & Performance
-
-Rune performs best with regular maintenance. Here are automation strategies:
-
-### Cron Job Setup
-
-**Daily Maintenance (3 AM)**
-```bash
-# Expire working memory and regenerate context
+# Daily maintenance (3 AM)
 0 3 * * * /usr/local/bin/rune expire && /usr/local/bin/rune inject --output ~/.openclaw/workspace/FACTS.md
-```
 
-**Weekly Optimization (Sunday 2 AM)**  
-```bash
-# Consolidate memory and run self-review
+# Weekly optimization (Sunday 2 AM)
 0 2 * * 0 /usr/local/bin/rune consolidate --auto-prioritize && /usr/local/bin/rune self-review --days 7
-```
 
-**Monthly Deep Clean (1st of month, 1 AM)**
-```bash
-# Pattern analysis and database optimization
+# Monthly deep clean (1st of month, 1 AM)
 0 1 1 * * /usr/local/bin/rune pattern-analysis --days 30 && sqlite3 ~/.openclaw/memory.db "VACUUM; ANALYZE;"
-```
 
-### Database Backup
-```bash
-# Daily backup at 4 AM
+# Database backup (daily 4 AM)
 0 4 * * * cp ~/.openclaw/memory.db ~/.openclaw/memory.db.backup.$(date +\%Y\%m\%d)
-# Keep last 7 days
 5 4 * * * find ~/.openclaw -name "memory.db.backup.*" -mtime +7 -delete
 ```
 
-### Performance Benefits
-- **🧹 Memory stays lean**: Auto-removes expired facts
-- **⚡ Faster queries**: Regular consolidation prevents bloat
-- **📈 Self-improvement**: Pattern detection catches recurring issues  
-- **🔄 Current context**: FACTS.md regenerated with latest data
-- **💾 Data protection**: Automated backups prevent loss
+### Benefits of Automation
+- Memory optimization prevents database bloat
+- Regular fact consolidation improves query performance
+- Pattern analysis enables continuous improvement
+- Automated backups protect against data loss
 
-### Memory Health Monitoring
+## Performance Monitoring
+
 ```bash
-# Check database size and fact count
+# Check database health
 rune stats
 
-# Review recent patterns
-rune pattern-analysis --days 7
-
-# Check consolidation opportunities  
+# Review consolidation opportunities
 rune consolidate --dry-run
+
+# Analyze patterns
+rune pattern-analysis --days 7
 ```
 
 ## Troubleshooting
 
-**Memory growing too large?**
+**Large database size:**
 - Run `rune consolidate` to merge similar facts
-- Use `rune forget` to apply forgetting curves  
-- Check `rune stats` for database size
+- Use `rune expire` to remove old working memory
+- Check `rune stats` for database metrics
 
-**Relevance scoring not working?**
-- Ensure Ollama is running: `systemctl status ollama`
-- Test model: `rune score "test" --engine ollama`
-- Fall back to anthropic/openai engines
+**LLM integration issues:**
+- Verify Ollama status: `systemctl status ollama`
+- Test connectivity: `rune score "test" --engine ollama`
+- Check API key configuration for cloud providers
 
-**Context injection too verbose?**
-- Lower relevance threshold: `--threshold 0.6`  
+**Context generation problems:**
+- Adjust relevance threshold: `--threshold 0.6`
 - Use token budgeting: `rune budget "query" --tokens 300`
+- Review fact relevance with `rune score`
 
 ## Contributing
 
-Rune is open source. Contributions welcome:
-- **Memory Science**: Better consolidation algorithms, forgetting curves
-- **LLM Integration**: New scoring engines, extraction methods
-- **UI/UX**: Better command interfaces, visualization tools
-- **Performance**: Speed optimizations, memory efficiency
+Rune welcomes contributions:
+- **Algorithm improvements**: Better consolidation and scoring
+- **LLM integrations**: Support for additional providers
+- **Performance optimization**: Query and storage efficiency
+- **Documentation**: Usage examples and guides
 
 ## License
 
-MIT License - Use freely, modify as needed.
+MIT License
 
 ---
 
-*Rune: Because your AI should remember like you do.*
+*Persistent memory for intelligent AI assistants.*

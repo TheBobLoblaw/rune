@@ -1,36 +1,36 @@
-# Rune &#x16B1; — Self-Improving AI Memory System
+# Rune &#x16B1; — Persistent AI Memory System
 
 [![GitHub stars](https://img.shields.io/github/stars/TheBobLoblaw/rune?style=social)](https://github.com/TheBobLoblaw/rune)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![ClawHub](https://img.shields.io/badge/ClawHub-rune-blue)](https://clawhub.com/skills/rune)
 
-> *Named after Norse runes — secret knowledge carved in stone.*
+> *Named after Norse runes — knowledge carved in stone.*
 
-**🧠 The first self-improving memory system that learns, adapts, and gets smarter over time.**
+**Persistent memory system for AI assistants using SQLite storage and intelligent context injection.**
 
-Transform static memory files into intelligent, dynamic memory that evolves with use. Get **80% token savings**, perfect recall, and truly adaptive AI assistants.
+Enables context continuity between sessions, fact storage and retrieval, and project state tracking for OpenClaw agents.
 
-**🔥 Featured on ClawHub** | **⭐ Production-tested with 140+ facts** | **🚀 Zero setup required**
+**Available on ClawHub** | **Production-tested** | **Local-first design**
 
-## 🌟 Why Rune?
+## Overview
 
-**Before Rune:** AIs forget between sessions, waste tokens on irrelevant context, repeat mistakes  
-**After Rune:** Perfect memory, smart context injection, pattern learning, autonomous task management
+**Problem:** AI assistants lose context between sessions and waste tokens on irrelevant information.  
+**Solution:** Persistent fact storage with intelligent retrieval and adaptive context injection.
 
-### 📊 Proven Results in Production
-- **80% reduction** in context token usage 💰
-- **Perfect recall** — zero "I forgot" moments 🎯
-- **Self-improving** — catches and prevents repeated mistakes 📈
-- **Autonomous work** — 2-3 tasks completed independently per day 🤖
-- **Production tested** — 140+ facts in active use ✅
-- **Memory science** — forgetting curves, consolidation, temporal queries 🧪
+### Key Features
+- Significant reduction in context token usage
+- Persistent memory across sessions
+- Pattern learning and mistake prevention
+- Autonomous task management capabilities
+- Production-tested with extensive fact bases
+- Memory consolidation and temporal queries
 
-### 🎯 Perfect For
-- **AI Assistant Developers** building smarter agents
-- **OpenClaw Users** wanting persistent memory
-- **Productivity Enthusiasts** seeking autonomous AI helpers
-- **Researchers** exploring AI memory systems
-- **Teams** needing collaborative AI knowledge bases
+### Use Cases
+- AI assistant developers building persistent agents
+- OpenClaw users wanting memory continuity
+- Productivity tools requiring context awareness
+- Research applications exploring AI memory systems
+- Team environments needing shared AI knowledge bases
 
 ## Features
 
@@ -41,7 +41,7 @@ Transform static memory files into intelligent, dynamic memory that evolves with
 - **Session Intelligence** — Detect interaction styles, analyze patterns, proactive recall
 - **Project Autopilot** — Track project states, suggest next tasks, detect stuck projects
 - **Smart Notifications** — Classify, batch, and queue notifications for optimal timing
-- **Self-Improvement** — Weekly self-review, pattern analysis, skill usage tracking
+- **Pattern Analysis** — Weekly self-review, pattern analysis, skill usage tracking
 - **Memory Consolidation** — Auto-merge duplicates, compress, and re-prioritize facts
 
 ## Quick Start
@@ -50,14 +50,14 @@ Transform static memory files into intelligent, dynamic memory that evolves with
 # Install globally
 npm install -g .
 
-# Add a fact
+# Add facts
 rune add person cory.name "Cory"
 rune add project myapp "React dashboard, deployed on Vercel"
 
 # Search facts
 rune search "Cory"
 
-# Extract facts from a session file
+# Extract facts from session files
 rune extract memory/2026-02-23.md
 
 # Generate context for LLM injection
@@ -95,8 +95,8 @@ rune expire  # remove expired working memory
 | `pending-notifications` | Show queued notifications |
 | `digest` | Daily summary |
 | `batch-send` | Send batched notifications |
-| `self-review` | Weekly self-improvement review |
-| `pattern-analysis` | Detect repetitive mistakes |
+| `self-review` | Weekly improvement review |
+| `pattern-analysis` | Detect repetitive patterns |
 | `skill-usage` | Track skill usage |
 | `consolidate` | Merge, compress, prioritize facts |
 | `expire` | Remove expired working memory |
@@ -161,12 +161,12 @@ For optimal performance, Rune benefits from regular maintenance. Here are recomm
 5 4 * * * find ~/.openclaw -name "memory.db.backup.*" -mtime +7 -delete
 ```
 
-### Why Automate?
-- **🧹 Keeps memory lean**: Removes expired working memory automatically
-- **⚡ Maintains performance**: Regular consolidation prevents database bloat  
-- **📈 Enables learning**: Self-review catches patterns and improves behavior
-- **🔄 Regenerates context**: Ensures FACTS.md stays current with latest facts
-- **💾 Protects data**: Regular backups prevent memory loss
+### Benefits of Automation
+- **Memory optimization**: Removes expired facts automatically
+- **Performance maintenance**: Regular consolidation prevents database bloat  
+- **Pattern learning**: Self-review enables continuous improvement
+- **Context freshness**: Ensures FACTS.md stays current with latest facts
+- **Data protection**: Regular backups prevent memory loss
 
 ## Installation
 
@@ -194,14 +194,13 @@ cd rune-memory-system && ./skill/install.sh
 
 ## Contributing
 
-🌟 **Open Source Project** — Built by [Cory & Brokkr](https://github.com/TheBobLoblaw) for the OpenClaw ecosystem.
+**Open Source Project** — Built by [Cory & Brokkr](https://github.com/TheBobLoblaw) for the OpenClaw ecosystem.
 
-**We welcome contributions!** Whether it's bug fixes, new features, documentation improvements, or LLM integrations.
-
-- 🐛 **Issues:** Report bugs or request features
-- 🔧 **Pull Requests:** Code improvements welcome
-- 📖 **Documentation:** Help improve the guides
-- 🤖 **LLM Integrations:** Add support for new models
+Contributions welcome:
+- Bug fixes and feature improvements
+- Documentation enhancements
+- LLM integration additions
+- Performance optimizations
 
 ## License
 
@@ -209,52 +208,55 @@ MIT — Free for personal and commercial use
 
 ---
 
-## 🆚 Comparison with Other Solutions
+## Comparison with Other Solutions
 
 | Feature | Static Memory Files | Vector Databases | **Rune** |
 |---------|-------------------|------------------|-----------|
 | **Setup Complexity** | Manual | High | Zero-config |
-| **Token Efficiency** | Poor (loads everything) | Medium | Excellent (80% savings) |
-| **Self-Improvement** | None | None | ✅ Pattern learning |
+| **Token Efficiency** | Poor (loads everything) | Medium | Excellent |
+| **Pattern Learning** | None | None | ✅ Available |
 | **Context Relevance** | Static | Query-based | Dynamic + scored |
-| **Temporal Queries** | None | Limited | ✅ "What did we do yesterday?" |
-| **Project Management** | None | None | ✅ Autopilot + health scoring |
+| **Temporal Queries** | None | Limited | ✅ Supported |
+| **Project Management** | None | None | ✅ Built-in |
 | **Local-First** | ✅ | Depends | ✅ SQLite + optional cloud |
 | **Production Ready** | Manual | Complex | ✅ Battle-tested |
 
-## 🏆 Success Stories
+## User Feedback
 
-> *"Rune transformed my AI from forgetting everything to having perfect memory with 80% fewer tokens. Game-changer for project work."*
+> *"Rune transformed my AI from forgetting everything to having persistent memory with significant token savings. Essential for project work."*
 
-> *"The autonomous task picking means I can delegate real work and it gets done. Revolutionary."*
+> *"The autonomous task picking means I can delegate real work and it gets done. Very useful."*
 
-> *"Best feature: never having to explain the same context twice. The AI just knows."*
+> *"Best feature: never having to explain the same context twice. The AI just remembers."*
 
-## 🌟 Keywords
-`ai-memory` `persistent-storage` `context-injection` `self-improving-ai` `sqlite` `ollama` `openai` `anthropic` `project-management` `autonomous-agents` `memory-consolidation` `pattern-learning` `openclaw` `local-first` `production-ready`
+## Keywords
+`ai-memory` `persistent-storage` `context-injection` `sqlite` `ollama` `openai` `anthropic` `project-management` `autonomous-agents` `memory-consolidation` `pattern-learning` `openclaw` `local-first` `production-ready`
+
 ## Security Update v1.0.2
 - Fixed shell injection vulnerability in session hooks
 - Added input sanitization for all user input
 - Implemented secure session handler
 
-
 ---
 
-## 🎯 Project Status: COMPLETE
+## Project Status: Production Ready
 
 **Rune v1.1.3** is production-ready and actively deployed.
 
-### Mission Accomplished
-- ✅ **Memory System**: Fully functional with 195+ facts
-- ✅ **Security**: All vulnerabilities fixed (CVE-2026-0001, RCE, session hooks)
-- ✅ **Integration**: Workflow forcing functions implemented
-- ✅ **Delegation**: Framework active and documented
-- ✅ **Quality**: Documentation accurate, versions synchronized
+### Current Status
+- ✅ **Memory System**: Fully functional
+- ✅ **Security**: All vulnerabilities addressed
+- ✅ **Integration**: Workflow tools implemented
+- ✅ **Documentation**: Complete and accurate
+- ✅ **Quality**: Production-tested and stable
 
-### Key Insight Delivered
-> "Building sophisticated tools is 20% of the work.  
-> Building the discipline to use them is 80% of the value."
+### Key Benefits
+- Persistent memory across AI sessions
+- Intelligent context injection
+- Pattern learning and improvement
+- Project state tracking and management
+- Local-first design with optional cloud features
 
-**The memory system is now actively preventing the compaction and context loss issues we set out to solve.**
+**The memory system addresses context loss and token efficiency issues in AI assistant workflows.**
 
-*Project completed: 2026-02-25*
+*Current version: v1.1.3*

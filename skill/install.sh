@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Install script for Rune - Self-Improving AI Memory System
+# Install script for Rune - Persistent AI Memory System
 # Includes automatic backups, verification modes, and security improvements
 
 # Parse command line arguments
@@ -50,38 +50,38 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "🧠 Rune - Self-Improving AI Memory System Installer"
-echo "=================================================="
+echo "Rune - Persistent AI Memory System Installer"
+echo "============================================="
 
 # Verification mode
 if [ "$VERIFY_ONLY" = true ]; then
-    echo "🔍 Package verification mode..."
+    echo "Package verification mode..."
     
-    echo "✅ Checking package.json..."
+    echo "Checking package.json..."
     if [[ -f "package.json" ]]; then
         echo "   Package: $(jq -r '.name' package.json) v$(jq -r '.version' package.json)"
         echo "   Dependencies: $(jq -r '.dependencies | keys | length' package.json) required, $(jq -r '.optionalDependencies | keys | length // 0' package.json) optional"
     else
-        echo "❌ package.json not found - incomplete package"
+        echo "package.json not found - incomplete package"
         exit 1
     fi
     
-    echo "✅ Checking source files..."
+    echo "Checking source files..."
     if [[ -f "bin/cli.js" ]]; then
         echo "   CLI: $(wc -l < bin/cli.js) lines"
     else
-        echo "❌ bin/cli.js not found - incomplete package"
+        echo "bin/cli.js not found - incomplete package"
         exit 1
     fi
     
-    echo "✅ Package verification complete"
+    echo "Package verification complete"
     exit 0
 fi
 
 # Pre-installation summary
 echo ""
-echo "📋 Installation Summary:"
-echo "========================"
+echo "Installation Summary:"
+echo "===================="
 echo "• Package: Rune v$(jq -r '.version' package.json 2>/dev/null || echo 'unknown')"
 echo "• CLI Command: rune (replaces any existing brokkr-mem)"
 echo "• Database: ~/.openclaw/memory.db (SQLite)"
@@ -91,7 +91,7 @@ echo "• Default: Local models (Ollama) - cloud APIs optional"
 echo ""
 
 if [ "$DRY_RUN" = true ]; then
-    echo "🔍 Dry run mode - showing what would be done:"
+    echo "Dry run mode - showing what would be done:"
     echo ""
     
     echo "1. Check Node.js version >= 18.0.0"
@@ -116,18 +116,18 @@ fi
 
 # Safety checks
 if [ "$FORCE" = false ]; then
-    echo "⚠️  Pre-installation checks:"
+    echo "Pre-installation checks:"
     
     if command -v rune &> /dev/null; then
-        echo "   ⚠️  'rune' command already exists - will be replaced"
+        echo "   'rune' command already exists - will be replaced"
     fi
     
     if command -v brokkr-mem &> /dev/null; then
-        echo "   ⚠️  'brokkr-mem' command exists - will be replaced by 'rune'"
+        echo "   'brokkr-mem' command exists - will be replaced by 'rune'"
     fi
     
     if [[ -f "$HOME/.openclaw/memory.db" ]]; then
-        echo "   ⚠️  Memory database exists - will be backed up"
+        echo "   Memory database exists - will be backed up"
     fi
     
     echo ""
@@ -140,12 +140,12 @@ if [ "$FORCE" = false ]; then
 fi
 
 echo ""
-echo "🚀 Starting installation..."
+echo "Starting installation..."
 
 # 1. Check Node.js version
 echo "1. Checking Node.js version..."
 if ! command -v node &> /dev/null; then
-    echo "❌ Node.js is required but not installed. Please install Node.js >= 18.0.0"
+    echo "Node.js is required but not installed. Please install Node.js >= 18.0.0"
     exit 1
 fi
 
@@ -154,10 +154,10 @@ NODE_MAJOR=$(echo $NODE_VERSION | cut -d. -f1)
 REQUIRED_MAJOR=18
 
 if [ "$NODE_MAJOR" -lt "$REQUIRED_MAJOR" ]; then
-    echo "❌ Node.js >= 18.0.0 is required. Current version: $NODE_VERSION"
+    echo "Node.js >= 18.0.0 is required. Current version: $NODE_VERSION"
     exit 1
 fi
-echo "   ✅ Node.js $NODE_VERSION"
+echo "   Node.js $NODE_VERSION"
 
 # 2. Create backups
 echo "2. Creating automatic backups..."
@@ -168,47 +168,47 @@ mkdir -p "$WORKSPACE_DIR"
 
 if [[ -f "$WORKSPACE_DIR/HEARTBEAT.md" ]]; then
     cp "$WORKSPACE_DIR/HEARTBEAT.md" "$WORKSPACE_DIR/HEARTBEAT.md.backup-$TIMESTAMP"
-    echo "   ✅ HEARTBEAT.md backed up"
+    echo "   HEARTBEAT.md backed up"
 fi
 
 if [[ -f "$MEMORY_DIR/memory.db" ]]; then
     cp "$MEMORY_DIR/memory.db" "$MEMORY_DIR/memory.db.backup-$TIMESTAMP"
-    echo "   ✅ memory.db backed up"
+    echo "   memory.db backed up"
 fi
 
 # 3. Install npm dependencies
 echo "3. Installing dependencies..."
 if ! npm install --production --silent; then
-    echo "❌ Failed to install npm dependencies"
+    echo "Failed to install npm dependencies"
     exit 1
 fi
-echo "   ✅ Dependencies installed"
+echo "   Dependencies installed"
 
 # 4. Install CLI globally
 echo "4. Installing rune CLI globally..."
 if ! npm install -g . --silent; then
-    echo "❌ Failed to install rune CLI globally"
+    echo "Failed to install rune CLI globally"
     exit 1
 fi
-echo "   ✅ rune CLI installed"
+echo "   rune CLI installed"
 
 # 5. Initialize database
 echo "5. Initializing memory database..."
 rune stats > /dev/null 2>&1 || true
-echo "   ✅ Database initialized"
+echo "   Database initialized"
 
 # 6. Check for local models (Ollama)
 echo "6. Checking local model availability..."
 if command -v ollama &> /dev/null; then
-    echo "   ✅ Ollama detected - local scoring enabled"
+    echo "   Ollama detected - local scoring enabled"
     
     if ollama list 2>/dev/null | grep -q "llama3.1:8b"; then
-        echo "   ✅ llama3.1:8b model available"
+        echo "   llama3.1:8b model available"
     else
-        echo "   ⚠️  Recommended: ollama pull llama3.1:8b"
+        echo "   Recommended: ollama pull llama3.1:8b"
     fi
 else
-    echo "   ⚠️  Ollama not found - install for local scoring"
+    echo "   Ollama not found - install for local scoring"
     echo "      Cloud APIs available with optional API keys"
 fi
 
@@ -220,7 +220,7 @@ if [[ ! -f "$HEARTBEAT_FILE" ]]; then
     cat > "$HEARTBEAT_FILE" << 'EOF'
 # HEARTBEAT.md
 
-## 🧠 Rune Memory Maintenance (ACTIVE)
+## Rune Memory Maintenance
 - `rune expire` — prune expired working memory
 - `rune inject --output ~/.openclaw/workspace/FACTS.md` — regenerate intelligent context
 - `rune consolidate --auto-prioritize` — optimize memory (weekly)
@@ -228,19 +228,19 @@ if [[ ! -f "$HEARTBEAT_FILE" ]]; then
 ## Next Actions
 Check `rune next-task` for intelligent task recommendations based on memory patterns.
 EOF
-    echo "   ✅ HEARTBEAT.md created with Rune integration"
+    echo "   HEARTBEAT.md created with Rune integration"
 else
     if ! grep -q "rune" "$HEARTBEAT_FILE"; then
         echo "" >> "$HEARTBEAT_FILE"
-        echo "## 🧠 Rune Memory Maintenance (ACTIVE)" >> "$HEARTBEAT_FILE"
+        echo "## Rune Memory Maintenance" >> "$HEARTBEAT_FILE"
         echo '- `rune expire` — prune expired working memory' >> "$HEARTBEAT_FILE"
         echo '- `rune inject --output ~/.openclaw/workspace/FACTS.md` — regenerate intelligent context' >> "$HEARTBEAT_FILE"
         echo '- `rune consolidate --auto-prioritize` — optimize memory (weekly)' >> "$HEARTBEAT_FILE"
         echo "" >> "$HEARTBEAT_FILE"
         echo "Check \`rune next-task\` for intelligent task recommendations." >> "$HEARTBEAT_FILE"
-        echo "   ✅ Rune integration added to existing HEARTBEAT.md"
+        echo "   Rune integration added to existing HEARTBEAT.md"
     else
-        echo "   ℹ️  Rune integration already present"
+        echo "   Rune integration already present"
     fi
 fi
 
@@ -249,42 +249,42 @@ echo "8. Setting up initial memory..."
 rune add system rune.installed "$(date -Iseconds)" --tier permanent --source "installer" 2>/dev/null || true
 rune add system rune.version "$(jq -r '.version' package.json)" --tier permanent --source "installer" 2>/dev/null || true
 rune add preference memory.default_model "ollama:llama3.1:8b" --tier working --source "installer" 2>/dev/null || true
-echo "   ✅ Initial memory configured"
+echo "   Initial memory configured"
 
 echo ""
-echo "🎉 Rune Installation Complete!"
-echo "=============================="
+echo "Rune Installation Complete!"
+echo "=========================="
 echo ""
-echo "📍 What was installed:"
+echo "What was installed:"
 echo "   • CLI: rune command (global)"
 echo "   • Database: ~/.openclaw/memory.db"
 echo "   • Integration: ~/.openclaw/workspace/HEARTBEAT.md"
 echo "   • Backups: Created automatically with timestamp"
 echo ""
-echo "🚀 Quick Start:"
+echo "Quick Start:"
 echo "   rune add person your_name 'Your Name - the human user'"
 echo "   rune context 'working on a new project'"
 echo "   rune stats"
 echo ""
-echo "🔧 Configuration:"
+echo "Configuration:"
 echo "   • Default: Local models (Ollama) - private and free"
 echo "   • Optional: Set API keys for cloud scoring"
 echo "     export ANTHROPIC_API_KEY='your-key'  # Optional"
 echo "     export OPENAI_API_KEY='your-key'     # Optional"
 echo ""
-echo "📚 Learn More:"
+echo "Learn More:"
 echo "   rune --help          # Full command reference"
 echo "   rune context --help  # Context injection"
 echo "   rune next-task       # AI task recommendations"
 echo ""
-echo "🧠 Your AI now has persistent, self-improving memory!"
+echo "Your AI now has persistent memory capabilities!"
 
 # Final verification
 if command -v rune &> /dev/null; then
     echo ""
-    echo "✅ Installation verified - rune command is available"
+    echo "Installation verified - rune command is available"
 else
     echo ""
-    echo "⚠️  Warning: rune command not found in PATH"
+    echo "Warning: rune command not found in PATH"
     echo "   You may need to restart your shell or run: source ~/.bashrc"
 fi

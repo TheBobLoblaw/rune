@@ -1,10 +1,9 @@
 #!/bin/bash
 
-echo "🛠️ RUNE WORKFLOW INTEGRATION SETUP"
-echo "=================================="
+echo "Rune Workflow Integration Setup"
+echo "==============================="
 echo ""
-echo "⚠️  CRITICAL: This step is required for Rune to be useful!"
-echo "   Many users skip workflow integration and never use their memory system."
+echo "This script sets up integration helpers for Rune."
 echo ""
 
 # Create scripts directory
@@ -13,120 +12,117 @@ mkdir -p ~/.openclaw/workspace/scripts
 # Create session start hook
 cat > ~/.openclaw/workspace/scripts/session-start.sh << 'SESSIONEOF'
 #!/bin/bash
-echo "🧠 RUNE MEMORY RECALL - Session Start"
-echo "====================================="
+echo "Rune Memory Recall - Session Start"
+echo "=================================="
 
-# Force context recall
-echo "📋 Recent project context:"
+# Recall recent context
+echo "Recent project context:"
 rune search "project" | head -5
 
 echo ""
-echo "🎯 Active tasks:"  
+echo "Active tasks:"  
 rune search "task" | head -3
 
 echo ""
-echo "💡 Recent decisions:"
+echo "Recent decisions:"
 rune search "decision" | head -3
 
 echo ""
-echo "🚨 REMINDER: Always recall context BEFORE responding!"
-echo "Use: rune recall '[topic]' for specific context"
+echo "For specific context: rune recall '[topic]'"
 SESSIONEOF
 
 chmod +x ~/.openclaw/workspace/scripts/session-start.sh
 
-# Create context injection helper with SECURITY SANITIZATION
+# Create context injection helper
 cat > ~/.openclaw/workspace/scripts/context-inject.sh << 'CONTEXTEOF'
 #!/bin/bash
 TOPIC="$1"
 
-# Security function to sanitize input - prevents shell injection
+# Sanitize input to prevent shell injection
 sanitize_input() {
   local input="$1"
-  
-  # Remove dangerous characters and limit length
-  echo "$input" | \
-    head -c 500 | \
-    tr -d '`$(){}[]|;&<>' | \
-    sed 's/[^a-zA-Z0-9 ._-]//g' | \
-    head -c 200
+  echo "$input" | head -c 200 | tr -d '`$(){}[]|;&<>' | sed 's/[^a-zA-Z0-9 ._-]//g'
 }
 
-# Sanitize the topic input to prevent shell injection attacks
 SAFE_TOPIC=$(sanitize_input "$TOPIC")
 
-echo "🧠 INJECTING CONTEXT FOR: $SAFE_TOPIC"
-echo "=================================="
+echo "Rune Context Injection for: $SAFE_TOPIC"
+echo "======================================="
 
-# Search for relevant context using SANITIZED input
-echo "📋 Relevant context:"
+# Search for relevant context using sanitized input
+echo "Relevant context:"
 rune recall "$SAFE_TOPIC" 2>/dev/null || rune search "$SAFE_TOPIC" | head -5
 
-# Log usage with sanitized input
+# Log usage
 echo "$(date): Context recalled for '$SAFE_TOPIC'" >> /tmp/rune-usage.log
 
 echo ""
-echo "✅ Context loaded. Proceed with informed response."
+echo "Context loaded."
 CONTEXTEOF
 
 chmod +x ~/.openclaw/workspace/scripts/context-inject.sh
 
-# Create mandatory workflow documentation
-cat > ~/.openclaw/workspace/MANDATORY-MEMORY-WORKFLOW.md << 'WORKFLOWEOF'
-# MANDATORY MEMORY WORKFLOW - Rune Integration
+# Create workflow documentation
+cat > ~/.openclaw/workspace/RUNE-WORKFLOW-GUIDE.md << 'WORKFLOWEOF'
+# Rune Workflow Integration Guide
 
-## 🚨 CRITICAL: Memory Usage Is Not Optional
+## Overview
+Rune provides persistent memory between sessions. This guide shows recommended usage patterns.
 
-**Problem**: Many users install Rune but never integrate it into their workflow.
-**Result**: Sophisticated memory system goes completely unused.
+## Recommended Session Workflow
 
-## 📋 MANDATORY SESSION WORKFLOW
-
-### BEFORE Every Response
+### Before Responding
 ```bash
-# 1. ALWAYS recall relevant context first
+# Recall relevant context for the current topic
 rune recall "current projects recent decisions" 
 
-# 2. Search for specific topic context
-rune search "[topic from user message]" | head -5
-
-# 3. Only THEN respond with full context
+# Search for topic-specific context
+rune search "[relevant topic]" | head -5
 ```
 
-### DURING Conversations
+### During Conversations
 ```bash
-# Store important decisions immediately
+# Store important decisions
 rune add decision "[decision]" --tier [working|long-term]
 
-# Store project context updates  
+# Store project updates  
 rune add project "[project].[key]" "[update]" --tier working
 
 # Store lessons learned
 rune add lesson "[category].[specific]" "[lesson]" --tier long-term
 ```
 
-### SUCCESS INDICATORS
-✅ Starting responses with recalled context
-✅ Referencing past decisions in new work  
-✅ Building on previous conversations seamlessly
-✅ Never repeating explanations of recent work
+### Effective Usage Patterns
+- Reference recalled context in responses
+- Build on previous conversations
+- Store important information for future reference
+- Use project continuity between sessions
 
-### FAILURE INDICATORS  
-❌ "Cold start" responses without context
-❌ Asking for previously provided information
-❌ Losing project continuity between sessions
-❌ Not building institutional memory
+### Common Integration Challenges
+- Forgetting to check context before responding
+- Not storing important decisions or learnings
+- Losing project continuity between sessions
+- Treating each conversation as standalone
 
----
-**If you're not using memory, you're not using Rune properly.**
+## Usage Tips
+- Run memory recall helpers regularly
+- Store context incrementally during work
+- Review stored facts periodically
+- Use consolidation features to keep memory organized
+
+## Integration Scripts
+- Session start helper: ~/.openclaw/workspace/scripts/session-start.sh
+- Context injection: ~/.openclaw/workspace/scripts/context-inject.sh [topic]
+
+These scripts help integrate Rune into regular workflow patterns.
 WORKFLOWEOF
 
 echo ""
-echo "✅ Workflow integration complete!"
+echo "Workflow integration setup complete."
 echo ""
-echo "📋 NEXT STEPS:"
-echo "1. Run session start hook: ~/.openclaw/workspace/scripts/session-start.sh"
-echo "2. Use context injection: ~/.openclaw/workspace/scripts/context-inject.sh [topic]"  
-echo "3. Read workflow guide: ~/.openclaw/workspace/MANDATORY-MEMORY-WORKFLOW.md"
+echo "Available helpers:"
+echo "1. Session start: ~/.openclaw/workspace/scripts/session-start.sh"
+echo "2. Context injection: ~/.openclaw/workspace/scripts/context-inject.sh [topic]"  
+echo "3. Workflow guide: ~/.openclaw/workspace/RUNE-WORKFLOW-GUIDE.md"
 echo ""
-echo "🚨 REMEMBER: Without workflow integration, Rune is just an unused CLI tool!"
+echo "Integration helpers are now available for use."
