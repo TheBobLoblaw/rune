@@ -4,6 +4,31 @@ All notable changes to Rune (Self-Improving AI Memory System) will be documented
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-02-25
+
+### 📋 Documentation Fixes (ClawHub Security Review Response)
+
+#### Fixed
+- **Repository URL inconsistencies** in SKILL.md (placeholder URLs updated)
+- **Naming clarification** - Added section explaining Rune (skill) vs brokkr-mem (CLI)
+- **Installation disclosure** - Clear documentation of installation side effects
+
+#### Added
+- **Installation warning section** with detailed disclosure of what installation does
+- **Enhanced security documentation** including NPM dependency considerations  
+- **Privacy recommendations** for high-security environments
+- **Better explanation** of the relationship between skill name and CLI name
+
+#### Changed
+- Updated placeholder repository URLs from `github.com/your-org/brokkr-mem` to `github.com/TheBobLoblaw/rune`
+- Enhanced installation section with security considerations
+- Improved security & privacy documentation based on ClawHub review feedback
+
+#### Security
+- **No functional changes** - this is purely documentation improvement
+- All security fixes from v1.0.2 (CVE-2026-0001) remain intact
+- Added better disclosure of npm installation security considerations
+
 ## [1.0.2] - 2026-02-24
 
 ### 🔒 SECURITY

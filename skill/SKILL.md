@@ -1,6 +1,6 @@
 ---
 name: rune
-version: 1.0.2
+version: 1.0.3
 description: Self-improving AI memory system with intelligent context injection and adaptive learning
 keywords: [self-improvement, intelligent-memory, adaptive, context-injection, project-management]
 homepage: https://github.com/TheBobLoblaw/rune
@@ -39,15 +39,40 @@ metadata: {"install":[{"id":"brokkr-mem","kind":"script","script":"./install.sh"
 - **Performance Tracking**: Measurable improvement over time
 - **Skill Usage Analysis**: Which skills you use vs neglect
 
+## About Rune vs brokkr-mem
+
+**Rune** is the OpenClaw skill name. **brokkr-mem** is the CLI tool name. Think of Rune as the "skill package" and brokkr-mem as the "command-line interface" - like how the `git` skill package provides the `git` CLI.
+
+- **Skill name**: `rune` (what you install via ClawHub)  
+- **CLI command**: `brokkr-mem` (what you run in terminal)
+- **Repository**: https://github.com/TheBobLoblaw/rune
+
+## Installation Disclosure
+
+**⚠️ What This Installation Does:**
+
+The Rune skill installation will:
+- **Create directories**: `~/.openclaw/` and subdirectories
+- **Install globally**: `brokkr-mem` CLI via npm (requires npm dependencies)
+- **Create database**: SQLite database at `~/.openclaw/memory.db`
+- **Modify files**: Appends integration lines to existing `~/.openclaw/workspace/HEARTBEAT.md`
+- **Add session hooks**: Automatic memory integration for OpenClaw sessions
+
+**Before installing:**
+- **Back up** `HEARTBEAT.md` if it contains important data
+- **Review** `package.json` dependencies if security is critical
+- **Consider** using local models (Ollama) instead of cloud APIs for privacy
+
 ## Installation
 
 ```bash
-# Via ClawHub (coming soon)
+# Via ClawHub (recommended)
 clawhub install rune
 
 # Manual installation
-git clone https://github.com/your-org/brokkr-mem
-cd brokkr-mem
+git clone https://github.com/TheBobLoblaw/rune
+cd rune
+npm install --production
 npm install -g .
 ```
 
@@ -147,6 +172,7 @@ brokkr-mem recall "$SAFE_MESSAGE" --limit 10
 
 ## ⚠️ Security & Privacy
 
+### Data Storage
 **What Rune Stores:**
 - Facts you explicitly add via `brokkr-mem add`
 - Session interaction patterns for learning (conversation style, not content)
@@ -157,10 +183,28 @@ brokkr-mem recall "$SAFE_MESSAGE" --limit 10
 - API keys or credentials (use environment variables instead)
 - Sensitive personal information (unless you explicitly add it)
 
-**Cloud API Usage:**
+### Installation Security
+**NPM Dependencies:**
+- Installation fetches dependencies from npm registry at install time
+- Review `package.json` for dependencies if security is critical
+- Global npm install runs lifecycle scripts (standard npm behavior)
+- Consider installing in isolated environment (container/VM) for high-security use
+
+**Session Security:**
+- **Fixed CVE-2026-0001**: Input sanitization prevents shell injection
+- All user input sanitized before shell execution
+- Session handler validates and limits input length
+
+### Cloud API Usage
 - **Optional**: Rune can use OpenAI/Anthropic APIs for fact extraction and scoring
-- **Local-first**: Works completely offline with Ollama (recommended)
+- **Local-first**: Works completely offline with Ollama (recommended for privacy)
 - **Your choice**: Configure which engines to use in your setup
+
+### Privacy Recommendations
+- **Use local models** (Ollama) for maximum privacy
+- **Avoid cloud APIs** if processing sensitive information
+- **Review stored facts** periodically with `brokkr-mem search`
+- **Never store credentials** in memory - use environment variables
 
 **Privacy Best Practices:**
 - Never run `brokkr-mem add` with sensitive data (passwords, API keys, personal info)
