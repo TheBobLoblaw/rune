@@ -12,6 +12,24 @@ Transform static memory files into intelligent, dynamic memory that evolves with
 
 **🔥 Featured on ClawHub** | **⭐ Production-tested with 140+ facts** | **🚀 Zero setup required**
 
+## ⚠️ CRITICAL: Memory System Integration Required
+
+**WARNING**: Simply installing Rune is insufficient. You must integrate it into your workflow.
+
+### Common Mistake (Our Experience)
+❌ Installing the CLI but never using it systematically  
+❌ Building memory without workflow automation  
+❌ Optional usage that gets ignored under pressure  
+❌ **Result: Sophisticated system sits completely unused**
+
+### Required Integration  
+✅ Session start hooks that force memory recall  
+✅ Automated context injection before responses  
+✅ Regular memory maintenance in heartbeat cycles  
+✅ Mandatory decision storage during work  
+
+**See `INTEGRATION-GUIDE.md` for complete workflow setup after installation.**
+
 ## 🌟 Why Rune?
 
 **Before Rune:** AIs forget between sessions, waste tokens on irrelevant context, repeat mistakes  
@@ -179,6 +197,15 @@ clawhub install rune
 ```bash
 git clone https://github.com/TheBobLoblaw/rune.git
 cd rune
+
+# Step 1: Install the CLI
+./install.sh
+
+# Step 2: CRITICAL - Set up workflow integration
+./setup-workflow.sh
+
+# Step 3: Test the integration
+~/.openclaw/workspace/scripts/session-start.sh
 npm install -g .
 ```
 
