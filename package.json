@@ -1,6 +1,6 @@
 {
   "name": "rune",
-  "version": "1.1.0",
+  "version": "1.1.6",
   "description": "Self-improving AI memory system with intelligent context injection and adaptive learning",
   "type": "module",
   "bin": {
@@ -27,8 +27,8 @@
   },
   "license": "MIT",
   "keywords": [
-    "ai-memory", 
-    "context-injection", 
+    "ai-memory",
+    "context-injection",
     "self-improvement",
     "sqlite",
     "local-first"
