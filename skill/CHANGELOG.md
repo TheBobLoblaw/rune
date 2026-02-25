@@ -4,43 +4,6 @@ All notable changes to Rune (Self-Improving AI Memory System) will be documented
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2026-02-25
-
-### 🔒 Complete Security & Package Overhaul (ClawHub Review Response)
-
-#### Added
-- **Complete self-contained package** - All source code, dependencies included
-- **Automatic backup system** - Backs up HEARTBEAT.md and memory.db before changes
-- **Installation verification modes** - `--dry-run`, `--verify`, `--force` options
-- **Enhanced security documentation** - Complete SECURITY.md with audit info
-- **Local-first defaults** - Ollama default, cloud APIs explicitly opt-in
-- **Minimal dependency set** - Only 2 required deps (sqlite3, commander)
-
-#### Changed
-- **Unified naming**: All `brokkr-mem` references → `rune` throughout
-- **CLI command**: Now `rune` instead of `brokkr-mem` for consistency
-- **Package structure**: Self-contained with no external git clone required
-- **Installation process**: More secure with backups and verification
-- **Default behavior**: Local models preferred, cloud optional
-
-#### Fixed  
-- **Package completeness**: No more missing package.json or source files
-- **Installation reliability**: Self-contained package eliminates external dependencies
-- **Security transparency**: All dependencies visible and auditable
-- **Naming consistency**: Skill name and CLI command now aligned
-
-#### Security
-- **CVE-2026-0001**: Remains fixed from v1.0.2 (shell injection)
-- **Package integrity**: Complete source code included for security review
-- **Dependency audit**: Clean audit with minimal, vetted dependencies
-- **Installation safety**: Automatic backups prevent data loss
-
-#### Developer Experience
-- **Better error handling**: Clear messages for common issues
-- **Verification tools**: Easy package integrity checking
-- **Documentation**: Comprehensive security and installation guides
-- **Testing**: Dry-run mode for safe installation preview
-
 ## [1.0.3] - 2026-02-25
 
 ### 📋 Documentation Fixes (ClawHub Security Review Response)

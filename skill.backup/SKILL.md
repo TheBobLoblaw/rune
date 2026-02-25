@@ -49,44 +49,31 @@ metadata: {"install":[{"id":"rune","kind":"script","script":"./install.sh","labe
 
 ## Installation Disclosure
 
-**✅ Complete Self-Contained Package v1.1.0**
-
-This package now includes all source code, dependencies, and documentation - no external downloads required.
-
-**🔒 What This Installation Does:**
+**⚠️ What This Installation Does:**
 
 The Rune skill installation will:
-- **Create automatic backups**: Backs up existing HEARTBEAT.md and memory.db
 - **Create directories**: `~/.openclaw/` and subdirectories
-- **Install globally**: `rune` CLI via npm (minimal dependencies: sqlite3, commander)
+- **Install globally**: `rune` CLI via npm (requires npm dependencies)
 - **Create database**: SQLite database at `~/.openclaw/memory.db`
-- **Add integration**: Appends to `~/.openclaw/workspace/HEARTBEAT.md` (after backup)
-- **Default to local**: Uses Ollama by default, cloud APIs optional
+- **Modify files**: Appends integration lines to existing `~/.openclaw/workspace/HEARTBEAT.md`
+- **Add session hooks**: Automatic memory integration for OpenClaw sessions
 
-**🛡️ Security Improvements:**
-- **Automatic backups** of existing files before modification
-- **Verification modes**: `--dry-run` and `--verify` options  
-- **Minimal dependencies** (only 2 required: sqlite3, commander)
-- **Local-first defaults** (Ollama) - cloud APIs require explicit opt-in
-- **Complete source included** - no external git clone required
+**Before installing:**
+- **Back up** `HEARTBEAT.md` if it contains important data
+- **Review** `package.json` dependencies if security is critical
+- **Consider** using local models (Ollama) instead of cloud APIs for privacy
 
 ## Installation
 
 ```bash
-# Via ClawHub (recommended - security reviewed)
+# Via ClawHub (recommended)
 clawhub install rune
 
-# Installation with verification (recommended for security-conscious users)
-clawhub install rune
-cd ~/.openclaw/skills/rune
-./install.sh --verify  # Check package integrity
-./install.sh --dry-run # Preview what will be installed
-./install.sh          # Actual installation
-
-# Manual installation (self-contained)
+# Manual installation
 git clone https://github.com/TheBobLoblaw/rune
-cd rune/skill-complete
-./install.sh --verify
+cd rune
+npm install --production
+npm install -g .
 ```
 
 ## Quick Start
