@@ -1,11 +1,12 @@
-# Security Information - Rune v1.1.0
+# Security Information - Rune v1.1.2
 
 ## Package Security
 
-### Complete Self-Contained Distribution
-- **No external downloads**: All source code included in package
-- **No git clone required**: Installation works from bundle alone  
-- **Transparent dependencies**: All deps visible in package.json
+### Installation & Dependencies
+- **npm install process**: Installation fetches dependencies from npm registry
+- **No git clone required**: Installation works from packaged bundle alone  
+- **Transparent dependencies**: All deps visible in package.json for security audit
+- **No remote binary downloads**: All code comes from npm registry (auditable)
 
 ### Minimal Dependencies
 **Required (2):**
