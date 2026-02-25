@@ -4,6 +4,23 @@ All notable changes to Rune (Self-Improving AI Memory System) will be documented
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-02-25
+
+### 🔧 METADATA INTEGRITY FIX
+
+#### Fixed
+- **Registry metadata mismatch** - Resolved inconsistency where registry claimed "No install spec / instruction-only" but package contains install.sh and setup components
+- **ClawHub display name** - Now properly shows "Rune - Self-Improving AI Memory" instead of generic "Skill"
+- **Installation metadata** - Ensured skill.json install specifications are correctly published to registry
+
+#### Changed
+- **Clear installation documentation** - Explicitly documents that this is an installable skill with system-level integration
+- **Metadata consistency** - All package files and registry metadata now accurately reflect installation requirements
+
+#### Technical
+- **Publishing process** - Fixed ClawHub publication to include proper --name parameter and installation metadata
+- **Registry sync** - Resolved metadata inconsistencies caused by previous failed publications
+
 ## [1.1.3] - 2026-02-25
 
 ### 🚨 CRITICAL SECURITY FIX
